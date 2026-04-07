@@ -1,0 +1,123 @@
+#!/bin/bash
+#
+# Import alternate city names from GeoNames alternateNamesV2.txt
+# Filters by language and skips historic/postal/link entries
+# Only imports names for geonames that exist in cityinfo table
+#
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+DATA_FILE="$PROJECT_ROOT/data/alternateNamesV2.txt"
+TMP_GEOIDS="/tmp/geonames_ids.txt"
+TMP_FILTERED="/tmp/altnames_filtered.tsv"
+
+echo "=========================================="
+echo "Import Alternate Names"
+echo "=========================================="
+echo ""
+
+if [ ! -f "$DATA_FILE" ]; then
+    echo "Error: alternateNamesV2.txt not found"
+    echo "Please download first: ./scripts/download-alternatenames.sh"
+    exit 1
+fi
+
+FILE_SIZE=$(du -h "$DATA_FILE" | cut -f1)
+echo "Source: $DATA_FILE ($FILE_SIZE)"
+echo ""
+
+# Step 1: Export existing geoname IDs from cityinfo
+echo "Step 1: Extracting geoname IDs from cityinfo..."
+docker compose exec -T database \
+    mysql -u geonames -pgeonames geonames -sN \
+    -e "SELECT geonameid FROM cityinfo" > "$TMP_GEOIDS"
+
+GEOID_COUNT=$(wc -l < "$TMP_GEOIDS")
+echo "  Found $GEOID_COUNT geoname IDs in cityinfo"
+
+# Step 2: Filter alternate names
+echo ""
+echo "Step 2: Filtering alternate names..."
+echo "  Languages: de,en,fr,es,it,pt,nl,pl,ru,ja,zh,ko,ar + empty (default)"
+echo "  Skipping: historic, colloquial, postal, link, iata, icao, abbr, wkdt"
+
+sort -n "$TMP_GEOIDS" > "${TMP_GEOIDS}.sorted"
+
+awk -F'\t' '
+BEGIN { OFS="\t" }
+{
+    lang = $3
+    name = $4
+    is_colloquial = $7
+    is_historic = $8
+
+    if (is_historic == "1") next
+    if (is_colloquial == "1") next
+    if (lang == "post" || lang == "link" || lang == "iata" || lang == "icao" || lang == "faac" || lang == "abbr" || lang == "wkdt") next
+
+    if (lang != "" && lang != "de" && lang != "en" && lang != "fr" && lang != "es" && lang != "it" && lang != "pt" && lang != "nl" && lang != "pl" && lang != "ru" && lang != "ja" && lang != "zh" && lang != "ko" && lang != "ar") next
+
+    if (name == "") next
+
+    is_preferred = ($5 == "1") ? "1" : "0"
+    print $2, name, lang, is_preferred
+}
+' "$DATA_FILE" | sort -t$'\t' -k1,1n > "${TMP_FILTERED}.presorted"
+
+echo "  Filtered alternate names ready"
+
+# Step 3: Join with existing geoname IDs
+echo ""
+echo "Step 3: Joining with cityinfo geoname IDs..."
+join -t$'\t' -1 1 -2 1 "${TMP_GEOIDS}.sorted" "${TMP_FILTERED}.presorted" > "$TMP_FILTERED"
+
+FILTERED_COUNT=$(wc -l < "$TMP_FILTERED")
+echo "  Matched: $FILTERED_COUNT alternate names"
+
+if [ "$FILTERED_COUNT" -eq 0 ]; then
+    echo "No matching alternate names found. Aborting."
+    rm -f "$TMP_GEOIDS" "${TMP_GEOIDS}.sorted" "${TMP_FILTERED}.presorted" "$TMP_FILTERED"
+    exit 1
+fi
+
+# Step 4: Import
+echo ""
+echo "Step 4: Importing into city_alt_names..."
+
+docker compose exec -T database \
+    mysql -u geonames -pgeonames geonames \
+    -e "TRUNCATE TABLE city_alt_names"
+
+CONTAINER_NAME=$(docker compose ps -q database)
+docker cp "$TMP_FILTERED" "$CONTAINER_NAME:/var/lib/mysql-files/altnames_filtered.tsv"
+
+docker compose exec -T database \
+    mysql -u geonames -pgeonames geonames \
+    -e "LOAD DATA INFILE '/var/lib/mysql-files/altnames_filtered.tsv'
+        INTO TABLE city_alt_names
+        FIELDS TERMINATED BY '\t'
+        LINES TERMINATED BY '\n'
+        (geonameid, name, lang, is_preferred)"
+
+echo ""
+IMPORTED=$(docker compose exec -T database \
+    mysql -u geonames -pgeonames geonames -sN \
+    -e "SELECT COUNT(*) FROM city_alt_names")
+
+echo "=========================================="
+echo "Alternate Names Import Complete"
+echo "=========================================="
+echo "Imported: $IMPORTED alternate names"
+echo ""
+
+docker compose exec database \
+    mysql -u geonames -pgeonames geonames \
+    -e "SELECT lang, COUNT(*) as cnt FROM city_alt_names GROUP BY lang ORDER BY cnt DESC LIMIT 15"
+
+# Cleanup
+rm -f "$TMP_GEOIDS" "${TMP_GEOIDS}.sorted" "${TMP_FILTERED}.presorted" "$TMP_FILTERED"
+docker compose exec -T database rm -f /var/lib/mysql-files/altnames_filtered.tsv
+
+echo ""
+echo "Done"

@@ -1,0 +1,67 @@
+#!/bin/bash
+#
+# Download alternateNamesV2.zip from GeoNames
+#
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+DOWNLOAD_URL="http://download.geonames.org/export/dump/alternateNamesV2.zip"
+ZIP_FILE="$PROJECT_ROOT/data/alternateNamesV2.zip"
+TXT_FILE="$PROJECT_ROOT/data/alternateNamesV2.txt"
+
+echo "=========================================="
+echo "Download Alternate Names Dataset"
+echo "=========================================="
+echo ""
+echo "Source: GeoNames (http://www.geonames.org/)"
+echo "License: CC BY 4.0"
+echo "Download size: ~1.3 GB"
+echo ""
+
+if [ -f "$TXT_FILE" ]; then
+    echo "alternateNamesV2.txt already exists"
+    FILE_SIZE=$(du -h "$TXT_FILE" | cut -f1)
+    echo "Size: $FILE_SIZE"
+    echo ""
+    read -p "Re-download? (y/n) " -n 1 -r
+    echo ""
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        exit 0
+    fi
+    rm -f "$TXT_FILE" "$ZIP_FILE"
+fi
+
+read -p "Continue with download? (y/n) " -n 1 -r
+echo ""
+if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    echo "Aborted."
+    exit 1
+fi
+
+echo ""
+echo "Downloading..."
+if command -v wget &> /dev/null; then
+    wget --progress=bar:force -O "$ZIP_FILE" "$DOWNLOAD_URL"
+elif command -v curl &> /dev/null; then
+    curl -L --progress-bar -o "$ZIP_FILE" "$DOWNLOAD_URL"
+else
+    echo "Error: Neither wget nor curl is available"
+    exit 1
+fi
+
+echo ""
+echo "Extracting..."
+unzip -q "$ZIP_FILE" -d "$PROJECT_ROOT/data"
+
+read -p "Delete zip file to save space? (y/n) " -n 1 -r
+echo ""
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+    rm -f "$ZIP_FILE"
+fi
+
+echo ""
+echo "Done: $TXT_FILE"
+du -h "$TXT_FILE"
+echo ""
+echo "Next: ./scripts/import-alternatenames.sh"
