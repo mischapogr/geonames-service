@@ -58,6 +58,15 @@ Environment variables (set in `docker-compose.yml`):
 | `DB_USER` | `geonames` | Database user |
 | `DB_PASS` | `geonames` | Database password |
 | `CORS_ORIGIN` | `*` | Allowed CORS origin |
+| `API_KEY` | _(empty)_ | API key for authentication. When empty, no auth required. |
+
+## API Key Protection
+
+Set `API_KEY` to require authentication. When set, all requests (except `/health`) must include:
+- Header: `X-Api-Key: your-key`
+- Or query param: `?api_key=your-key`
+
+When `API_KEY` is empty (default), no authentication is required.
 
 ## Data Attribution
 
