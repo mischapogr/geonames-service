@@ -1,0 +1,39 @@
+services:
+  database:
+    image: mysql:8.0
+    container_name: geonames-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: geonames
+      MYSQL_USER: geonames
+      MYSQL_PASSWORD: geonames
+    ports:
+      - "3309:3306"
+    volumes:
+      - geonames_data:/var/lib/mysql
+      - ./migrations:/docker-entrypoint-initdb.d
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --local-infile=1
+      --secure-file-priv=/var/lib/mysql-files
+
+  app:
+    build: .
+    container_name: geonames-app
+    restart: unless-stopped
+    ports:
+      - "8082:80"
+    depends_on:
+      - database
+    environment:
+      DB_HOST: database
+      DB_PORT: 3306
+      DB_NAME: geonames
+      DB_USER: geonames
+      DB_PASS: geonames
+      CORS_ORIGIN: "*"
+
+volumes:
+  geonames_data:

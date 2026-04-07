@@ -1,0 +1,12 @@
+# GeoNames data files (download via scripts)
+data/*.txt
+data/*.zip
+data/*.tsv
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
