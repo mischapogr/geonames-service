@@ -7,12 +7,26 @@ $origin = $_SERVER['HTTP_ORIGIN'] ?? '*';
 $allowedOrigin = getenv('CORS_ORIGIN') ?: '*';
 header("Access-Control-Allow-Origin: {$allowedOrigin}");
 header('Access-Control-Allow-Methods: GET, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
+header('Access-Control-Allow-Headers: Content-Type, X-Api-Key');
 header('Content-Type: application/json; charset=utf-8');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(204);
     exit;
+}
+
+// Optional API key authentication
+$apiKey = getenv('API_KEY') ?: '';
+if ($apiKey !== '') {
+    $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+    if ($uri !== '/health') {
+        $provided = $_SERVER['HTTP_X_API_KEY'] ?? $_GET['api_key'] ?? '';
+        if ($provided !== $apiKey) {
+            http_response_code(401);
+            echo json_encode(['error' => 'Unauthorized', 'message' => 'Valid API key required via X-Api-Key header or api_key query parameter']);
+            exit;
+        }
+    }
 }
 
 // Database connection

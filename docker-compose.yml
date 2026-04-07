@@ -34,6 +34,7 @@ services:
       DB_USER: geonames
       DB_PASS: geonames
       CORS_ORIGIN: "*"
+      API_KEY: ""  # Set to enable API key protection (e.g. API_KEY=my-secret-key)
 
 volumes:
   geonames_data:
