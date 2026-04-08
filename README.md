@@ -23,10 +23,10 @@ Health check with city count.
 docker compose up -d
 
 # Download dev dataset (~7 MB, ~15K cities)
-./scripts/download-cities15000.sh
+./scripts/download-cities15000
 
 # Import into database
-./scripts/import-cities15000.sh
+./scripts/import-cities15000
 
 # Test
 curl "http://localhost:8082/api/cities/search?q=Zur"
@@ -36,14 +36,14 @@ curl "http://localhost:8082/api/cities/search?q=Zur"
 
 ```bash
 # Download full dataset (~1.5 GB compressed, 12M+ records)
-./scripts/download-allcountries.sh
+./scripts/download-allcountries
 
 # Import (filters to ~150K populated places, takes 5-15 min)
-./scripts/import-allcountries.sh
+./scripts/import-allcountries
 
 # Optional: alternate names for multi-language search
-./scripts/download-alternatenames.sh
-./scripts/import-alternatenames.sh
+./scripts/download-alternatenames
+./scripts/import-alternatenames
 ```
 
 ## Configuration

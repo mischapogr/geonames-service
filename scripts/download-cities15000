@@ -54,4 +54,4 @@ echo "Done: $TXT_FILE"
 LINE_COUNT=$(wc -l < "$TXT_FILE")
 echo "Records: $LINE_COUNT"
 echo ""
-echo "Next: ./scripts/import-cities15000.sh"
+echo "Next: ./scripts/import-cities15000"

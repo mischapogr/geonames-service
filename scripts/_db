@@ -1,0 +1,74 @@
+#!/bin/bash
+#
+# Shared database environment for import scripts.
+# Source this file: source "$(dirname "${BASH_SOURCE[0]}")/_db"
+#
+# Detects Docker (local dev) vs direct mysql (shared hosting).
+# Provides: run_mysql, load_data_file
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Detect environment
+if docker compose ps --quiet database 2>/dev/null | grep -q .; then
+    DB_MODE="docker"
+    echo "Environment: Docker (local dev)"
+else
+    DB_MODE="direct"
+
+    # Load credentials from scripts/.env (created by deploy on remote)
+    if [[ -f "$SCRIPT_DIR/.env" ]]; then
+        set -a
+        source "$SCRIPT_DIR/.env"
+        set +a
+    fi
+
+    DB_HOST="${DB_HOST:-localhost}"
+    DB_PORT="${DB_PORT:-3306}"
+    DB_NAME="${DB_NAME:-geonames}"
+    DB_USER="${DB_USER:-geonames}"
+    DB_PASS="${DB_PASS:-}"
+
+    echo "Environment: Direct mysql ($DB_USER@$DB_HOST:$DB_PORT/$DB_NAME)"
+fi
+
+# Run a mysql command/query
+# Usage: run_mysql -e "SELECT 1"
+#        echo "SELECT 1" | run_mysql
+run_mysql() {
+    if [[ "$DB_MODE" == "docker" ]]; then
+        docker compose exec -T database mysql -u geonames -pgeonames geonames "$@"
+    else
+        mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" "$@"
+    fi
+}
+
+# Load a TSV file into a table using LOAD DATA
+# Usage: load_data_file <local_file> <table_name> <columns>
+# Example: load_data_file /tmp/data.tsv cityinfo "(geonameid, name, latitude)"
+load_data_file() {
+    local local_file="$1"
+    local table="$2"
+    local columns="$3"
+
+    if [[ "$DB_MODE" == "docker" ]]; then
+        local container
+        container=$(docker compose ps -q database)
+        local remote_path="/var/lib/mysql-files/$(basename "$local_file")"
+        docker cp "$local_file" "$container:$remote_path"
+        run_mysql -e "LOAD DATA INFILE '$remote_path'
+            INTO TABLE $table
+            FIELDS TERMINATED BY '\t'
+            LINES TERMINATED BY '\n'
+            $columns"
+        docker compose exec -T database rm -f "$remote_path"
+    else
+        mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" \
+            --local-infile=1 \
+            -e "LOAD DATA LOCAL INFILE '$local_file'
+                INTO TABLE $table
+                FIELDS TERMINATED BY '\t'
+                LINES TERMINATED BY '\n'
+                $columns"
+    fi
+}
