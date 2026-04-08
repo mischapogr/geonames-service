@@ -7,6 +7,11 @@ data/*.tsv
 .idea/
 .vscode/
 
+# Deployment
+deploy
+.env.deploy
+src/.env.php
+
 # OS
 .DS_Store
 Thumbs.db

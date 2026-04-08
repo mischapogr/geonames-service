@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # Import GeoNames city data into cityinfo table
-# Usage: ./scripts/import-geonames-cities.sh <file.txt> [filter]
+# Usage: ./scripts/_import-geonames <file.txt> [filter]
 #
 set -e
 
@@ -17,6 +17,9 @@ if [ -z "$1" ]; then
     echo "  all    - Import everything (default for cities*.txt)"
     exit 1
 fi
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/_db"
 
 GEONAMES_FILE="$1"
 FILTER_MODE="${2:-all}"
@@ -43,11 +46,11 @@ TMP_TSV="/tmp/geonames_filtered.tsv"
 echo "Preparing filtered data..."
 
 if [ "$FILTER_MODE" = "cities" ]; then
-    echo "Filtering: (feature_class=P AND population>=100) OR (feature_class=A AND feature_code in ADM3,ADM4)..."
+    echo "Filtering: feature_class=P (all populated places)..."
     awk -F'\t' 'BEGIN { OFS="\t" }
     {
-        fc = $7; fcode = $8; pop = $15+0
-        if ((fc == "P" && pop >= 100) || (fc == "A" && (fcode == "ADM3" || fcode == "ADM4"))) {
+        fc = $7; pop = $15+0
+        if (fc == "P") {
             print $1, $2, $5, $6, $9, $11, $18, pop
         }
     }' "$GEONAMES_FILE" > "$TMP_TSV"
@@ -69,21 +72,13 @@ if [ "$FILTERED_COUNT" -eq 0 ]; then
     exit 1
 fi
 
-echo "Importing to database via LOAD DATA INFILE..."
+echo "Importing to database..."
 
-CONTAINER_NAME=$(docker compose ps -q database)
-docker cp "$TMP_TSV" "$CONTAINER_NAME:/var/lib/mysql-files/geonames_filtered.tsv"
-
-docker compose exec -T database mysql -u geonames -pgeonames geonames \
-    -e "LOAD DATA INFILE '/var/lib/mysql-files/geonames_filtered.tsv'
-        INTO TABLE cityinfo
-        FIELDS TERMINATED BY '\t'
-        LINES TERMINATED BY '\n'
-        (geonameid, name, latitude, longitude, country, state, timezone, population)"
+load_data_file "$TMP_TSV" "cityinfo" "(geonameid, name, latitude, longitude, country, state, timezone, population)"
 
 echo ""
 echo "Verifying import..."
-IMPORTED_COUNT=$(docker compose exec -T database mysql -u geonames -pgeonames geonames -sN -e "SELECT COUNT(*) FROM cityinfo")
+IMPORTED_COUNT=$(run_mysql -sN -e "SELECT COUNT(*) FROM cityinfo")
 
 echo "==========================================="
 echo "Import Complete!"
@@ -92,7 +87,6 @@ echo "Imported: $IMPORTED_COUNT records"
 echo ""
 
 rm -f "$TMP_TSV"
-docker compose exec -T database rm -f /var/lib/mysql-files/geonames_filtered.tsv
 
 echo "Sample data:"
-docker compose exec database mysql -u geonames -pgeonames geonames -e "SELECT name, country, state, population FROM cityinfo ORDER BY population DESC LIMIT 10"
+run_mysql -e "SELECT name, country, state, population FROM cityinfo ORDER BY population DESC LIMIT 10"

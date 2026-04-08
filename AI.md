@@ -17,9 +17,7 @@ PHP 8.3 REST API for city/location autocomplete, powered by GeoNames data. Runs 
 docker compose up -d
 
 # Import dev dataset
-./scripts/download-cities15000.sh
-./scripts/import-cities15000.sh
-
+./scripts/download-cities15000./scripts/import-cities15000
 # Test
 curl "http://localhost:8082/api/cities/search?q=Zur"
 ```

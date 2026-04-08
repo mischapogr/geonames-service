@@ -7,6 +7,8 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+source "$SCRIPT_DIR/_db"
+
 DATA_FILE="$PROJECT_ROOT/data/cities15000.txt"
 
 echo "=========================================="
@@ -16,7 +18,7 @@ echo ""
 
 if [ ! -f "$DATA_FILE" ]; then
     echo "Error: cities15000.txt not found"
-    echo "Please download first: ./scripts/download-cities15000.sh"
+    echo "Please download first: ./scripts/download-cities15000"
     exit 1
 fi
 
@@ -34,12 +36,11 @@ fi
 
 echo ""
 echo "Truncating tables..."
-docker compose exec -T database mysql -u geonames -pgeonames geonames \
-    -e "SET FOREIGN_KEY_CHECKS=0; TRUNCATE TABLE city_alt_names; TRUNCATE TABLE cityinfo; SET FOREIGN_KEY_CHECKS=1;"
+run_mysql -e "SET FOREIGN_KEY_CHECKS=0; TRUNCATE TABLE city_alt_names; TRUNCATE TABLE cityinfo; SET FOREIGN_KEY_CHECKS=1;"
 
 echo ""
 echo "Importing data..."
-"$PROJECT_ROOT/scripts/import-geonames-cities.sh" "$DATA_FILE" all
+"$PROJECT_ROOT/scripts/_import-geonames" "$DATA_FILE" all
 
 echo ""
 echo "Development dataset ready"

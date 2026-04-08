@@ -2,6 +2,11 @@
 
 declare(strict_types=1);
 
+// Load environment config for non-Docker deployments
+if (file_exists(__DIR__ . '/.env.php')) {
+    require __DIR__ . '/.env.php';
+}
+
 // CORS
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '*';
 $allowedOrigin = getenv('CORS_ORIGIN') ?: '*';
