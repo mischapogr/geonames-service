@@ -12,6 +12,10 @@ deploy
 .env.deploy
 src/.env.php
 
+# PHP
+/vendor/
+composer.lock
+
 # OS
 .DS_Store
 Thumbs.db
