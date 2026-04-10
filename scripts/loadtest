@@ -1,0 +1,216 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# ── Configuration ──────────────────────────────────────────────────
+BASE_URL="http://localhost:8082"
+REQUESTS=1000
+CONCURRENCY=10
+COMPOSE="docker compose"
+REPORT_DIR="docs"
+REPORT_FILE="${REPORT_DIR}/load-test-results.md"
+TMP_DIR=$(mktemp -d)
+
+ENDPOINTS=(
+    "/api/cities/search?q=Zur"
+    "/api/cities/2657896"
+    "/health"
+)
+ENDPOINT_LABELS=(
+    "City Search (q=Zur)"
+    "City by ID (Zürich)"
+    "Health"
+)
+
+# ── Prerequisite checks ───────────────────────────────────────────
+for cmd in ab vmstat; do
+    if ! command -v "$cmd" &>/dev/null; then
+        echo "ERROR: '$cmd' not found. Install apache2-utils and/or sysstat." >&2
+        exit 1
+    fi
+done
+
+mkdir -p "$REPORT_DIR"
+
+# ── Helper functions ──────────────────────────────────────────────
+wait_for_app() {
+    echo "  Waiting for app to be ready..."
+    for i in $(seq 1 30); do
+        if curl -sf "${BASE_URL}/health" >/dev/null 2>&1; then
+            echo "  App ready."
+            return 0
+        fi
+        sleep 1
+    done
+    echo "ERROR: App did not become ready within 30s" >&2
+    exit 1
+}
+
+restart_app() {
+    local cache_ttl="$1"
+    local http_cache_ttl="$2"
+    echo "  Restarting app with CACHE_TTL=${cache_ttl}, HTTP_CACHE_TTL=${http_cache_ttl}..."
+    CACHE_TTL="$cache_ttl" HTTP_CACHE_TTL="$http_cache_ttl" \
+        $COMPOSE up -d --force-recreate app >/dev/null 2>&1
+    wait_for_app
+}
+
+start_monitors() {
+    local prefix="$1"
+    vmstat 1 > "${TMP_DIR}/${prefix}_vmstat.log" 2>/dev/null &
+    echo $!
+}
+
+stop_monitors() {
+    local vmstat_pid="$1"
+    kill "$vmstat_pid" 2>/dev/null || true
+    wait "$vmstat_pid" 2>/dev/null || true
+}
+
+summarize_vmstat() {
+    local file="$1"
+    # Skip header lines (first 2), compute averages from numeric data
+    awk 'NR>2 && /^[ ]*[0-9]/ {
+        us+=$13; sy+=$14; id+=$15; wa+=$16;
+        free+=$4; buff+=$5; cache+=$6;
+        n++
+    } END {
+        if (n>0) {
+            printf "| CPU usr | CPU sys | CPU idle | CPU wait | Free MB | Buff MB | Cache MB |\n"
+            printf "|---------|---------|----------|----------|---------|---------|----------|\n"
+            printf "| %.1f%% | %.1f%% | %.1f%% | %.1f%% | %d | %d | %d |\n",
+                us/n, sy/n, id/n, wa/n, free/n/1024, buff/n/1024, cache/n/1024
+        }
+    }' "$file"
+}
+
+parse_ab() {
+    local file="$1"
+    local rps mean p50 p95 p99 failed
+    rps=$(grep "Requests per second" "$file" | awk '{print $4}')
+    mean=$(grep "Time per request.*mean\b" "$file" | head -1 | awk '{print $4}')
+    p50=$(grep "50%" "$file" | awk '{print $2}')
+    p95=$(grep "95%" "$file" | awk '{print $2}')
+    p99=$(grep "99%" "$file" | awk '{print $2}')
+    failed=$(grep "Failed requests" "$file" | awk '{print $3}')
+    echo "${rps:-0}|${mean:-0}|${p50:-0}|${p95:-0}|${p99:-0}|${failed:-0}"
+}
+
+run_warmup() {
+    local endpoint="$1"
+    # Warm up with a few requests to prime connections and caches
+    for i in $(seq 1 5); do
+        curl -sf "${BASE_URL}${endpoint}" >/dev/null 2>&1 || true
+    done
+}
+
+# ── Scenarios ─────────────────────────────────────────────────────
+declare -A SCENARIOS
+SCENARIOS=(
+    ["A_No_Cache"]="0|0"
+    ["B_APCu_Only"]="3600|0"
+    ["C_APCu_HTTP"]="3600|300"
+)
+SCENARIO_ORDER=("A_No_Cache" "B_APCu_Only" "C_APCu_HTTP")
+SCENARIO_LABELS=(
+    "A: No cache"
+    "B: APCu only (TTL=3600s)"
+    "C: APCu + HTTP Cache-Control (TTL=3600s/300s)"
+)
+
+# ── Collect system info ───────────────────────────────────────────
+echo "Collecting system info..."
+SYS_CPU=$(lscpu 2>/dev/null | grep "Model name" | sed 's/Model name: *//' || echo "unknown")
+SYS_CORES=$(nproc 2>/dev/null || echo "unknown")
+SYS_RAM=$(free -h 2>/dev/null | awk '/Mem:/ {print $2}' || echo "unknown")
+SYS_KERNEL=$(uname -r)
+
+# ── Build report header ──────────────────────────────────────────
+cat > "$REPORT_FILE" <<EOF
+# Load Test Results
+
+**Date:** $(date '+%Y-%m-%d %H:%M')
+**Tool:** Apache Bench (ab) — ${REQUESTS} requests, ${CONCURRENCY} concurrent
+
+## System
+
+| Property | Value |
+|----------|-------|
+| CPU | ${SYS_CPU} |
+| Cores | ${SYS_CORES} |
+| RAM | ${SYS_RAM} |
+| Kernel | ${SYS_KERNEL} |
+| Docker | $(docker --version 2>/dev/null | awk '{print $3}' | tr -d ',') |
+| PHP | $(docker exec geonames-app php -v 2>/dev/null | head -1 | awk '{print $2}' || echo "8.3") |
+
+## Endpoints tested
+
+| # | Endpoint |
+|---|----------|
+| 1 | \`/api/cities/search?q=Zur\` |
+| 2 | \`/api/cities/2657896\` |
+
+EOF
+
+# ── Run each scenario ────────────────────────────────────────────
+for idx in "${!SCENARIO_ORDER[@]}"; do
+    scenario="${SCENARIO_ORDER[$idx]}"
+    label="${SCENARIO_LABELS[$idx]}"
+    IFS='|' read -r cache_ttl http_cache_ttl <<< "${SCENARIOS[$scenario]}"
+
+    echo ""
+    echo "═══════════════════════════════════════════════════"
+    echo "  Scenario: ${label}"
+    echo "═══════════════════════════════════════════════════"
+
+    restart_app "$cache_ttl" "$http_cache_ttl"
+
+    # Start system monitors
+    vmstat_pid=$(start_monitors "${scenario}")
+
+    cat >> "$REPORT_FILE" <<EOF
+## Scenario ${label}
+
+\`CACHE_TTL=${cache_ttl}\` | \`HTTP_CACHE_TTL=${http_cache_ttl}\`
+
+### Request performance
+
+| Endpoint | Req/s | Mean (ms) | P50 (ms) | P95 (ms) | P99 (ms) | Failed |
+|----------|-------|-----------|----------|----------|----------|--------|
+EOF
+
+    for ep_idx in "${!ENDPOINTS[@]}"; do
+        endpoint="${ENDPOINTS[$ep_idx]}"
+        ep_label="${ENDPOINT_LABELS[$ep_idx]}"
+        ab_out="${TMP_DIR}/${scenario}_ep${ep_idx}.txt"
+
+        echo "  Testing: ${ep_label}..."
+        run_warmup "$endpoint"
+        ab -n "$REQUESTS" -c "$CONCURRENCY" -H "Accept: application/json" \
+            "${BASE_URL}${endpoint}" > "$ab_out" 2>/dev/null || true
+
+        IFS='|' read -r rps mean p50 p95 p99 failed <<< "$(parse_ab "$ab_out")"
+        echo "    → ${rps} req/s, mean ${mean}ms, p95 ${p95}ms"
+
+        echo "| ${ep_label} | ${rps} | ${mean} | ${p50} | ${p95} | ${p99} | ${failed} |" >> "$REPORT_FILE"
+    done
+
+    # Stop monitors and summarize
+    stop_monitors "$vmstat_pid"
+
+    echo "" >> "$REPORT_FILE"
+    echo "### System metrics (averaged during test)" >> "$REPORT_FILE"
+    echo "" >> "$REPORT_FILE"
+    summarize_vmstat "${TMP_DIR}/${scenario}_vmstat.log" >> "$REPORT_FILE"
+    echo "" >> "$REPORT_FILE"
+done
+
+# ── Cleanup ───────────────────────────────────────────────────────
+rm -rf "$TMP_DIR"
+
+# Reset app to no-cache default
+restart_app "0" "0"
+
+echo ""
+echo "════════════════════════════════════════════════════"
+echo "  Report saved to: ${REPORT_FILE}"
+echo "════════════════════════════════════════════════════"
