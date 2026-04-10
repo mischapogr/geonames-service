@@ -16,6 +16,14 @@ src/.env.php
 /vendor/
 composer.lock
 
+# Node (Playwright tests only)
+node_modules/
+package-lock.json
+
+# Playwright
+test-results/
+playwright-report/
+
 # OS
 .DS_Store
 Thumbs.db
