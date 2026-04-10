@@ -85,6 +85,17 @@ rsync ${RSYNC_OPTS} \
     --exclude='LICENSE' \
     --exclude='src/.env.php' \
     --exclude='scripts/.env' \
+    --exclude='_tmp/' \
+    --exclude='.claude/' \
+    --exclude='.idea/' \
+    --exclude='.vscode/' \
+    --exclude='tests/' \
+    --exclude='phpunit.xml' \
+    --exclude='.phpunit.result.cache' \
+    --exclude='composer.json' \
+    --exclude='composer.lock' \
+    --exclude='vendor/' \
+    --exclude='.gitignore' \
     --filter='P cgi-bin/' \
     --filter='P .htaccess' \
     "${SCRIPT_DIR}/" "${DEPLOY_HOST}:${REMOTE_ROOT}/" || rc=$?
@@ -118,6 +129,16 @@ putenv('DB_USER=${DB_USER}');
 putenv('DB_PASS=${DB_PASS}');
 putenv('CORS_ORIGIN=${CORS_ORIGIN}');
 putenv('API_KEY=${API_KEY}');
+EOF
+
+# ── Create scripts/.env for import scripts on remote host ──────────
+echo "Writing remote scripts/.env..."
+run_remote "cat > ${REMOTE_ROOT}/scripts/.env" <<EOF
+DB_HOST=${DB_HOST}
+DB_PORT=${DB_PORT}
+DB_NAME=${DB_NAME}
+DB_USER=${DB_USER}
+DB_PASS=${DB_PASS}
 EOF
 
 # ── Run migrations (opt-in with --migrate) ─────────────────────────
