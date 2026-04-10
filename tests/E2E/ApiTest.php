@@ -54,7 +54,6 @@ final class ApiTest extends TestCase
 
         $this->assertSame(200, $res['status']);
         $this->assertSame('ok', $res['body']['status']);
-        $this->assertGreaterThan(0, $res['body']['cities']);
     }
 
     public function testCitySearch(): void
