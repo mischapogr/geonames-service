@@ -15,6 +15,11 @@ header('Access-Control-Allow-Methods: GET, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, X-Api-Key');
 header('Content-Type: application/json; charset=utf-8');
 
+$httpCacheTtl = (int) (getenv('HTTP_CACHE_TTL') ?: '0');
+if ($httpCacheTtl > 0) {
+    header("Cache-Control: public, max-age={$httpCacheTtl}");
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(204);
     exit;
@@ -55,6 +60,25 @@ function getDb(): PDO
     return $pdo;
 }
 
+// Cache helpers (APCu, opt-in via CACHE_TTL env var)
+function cacheGet(string $key): mixed
+{
+    $ttl = (int) (getenv('CACHE_TTL') ?: '0');
+    if ($ttl <= 0 || !function_exists('apcu_fetch')) {
+        return false;
+    }
+    return apcu_fetch($key);
+}
+
+function cacheSet(string $key, mixed $value): void
+{
+    $ttl = (int) (getenv('CACHE_TTL') ?: '0');
+    if ($ttl <= 0 || !function_exists('apcu_store')) {
+        return;
+    }
+    apcu_store($key, $value, $ttl);
+}
+
 // Routing
 $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 
@@ -71,6 +95,13 @@ if (preg_match('#^/api/cities/(\d+)$#', $uri, $matches)) {
 
 function handleCityById(int $geonameid): void
 {
+    $cacheKey = "city:{$geonameid}";
+    $cached = cacheGet($cacheKey);
+    if ($cached !== false) {
+        echo json_encode($cached);
+        return;
+    }
+
     try {
         $db = getDb();
         $stmt = $db->prepare("
@@ -88,7 +119,9 @@ function handleCityById(int $geonameid): void
             return;
         }
 
-        echo json_encode(['success' => true, 'data' => $city]);
+        $result = ['success' => true, 'data' => $city];
+        cacheSet($cacheKey, $result);
+        echo json_encode($result);
     } catch (\Exception $e) {
         http_response_code(500);
         echo json_encode(['success' => false, 'error' => 'Database error: ' . $e->getMessage()]);
@@ -102,6 +135,13 @@ function handleCitySearch(): void
 
     if (strlen($query) < 2) {
         echo json_encode(['success' => true, 'data' => []]);
+        return;
+    }
+
+    $cacheKey = "search:" . strtolower($query) . ":{$country}";
+    $cached = cacheGet($cacheKey);
+    if ($cached !== false) {
+        echo json_encode($cached);
         return;
     }
 
@@ -134,7 +174,9 @@ function handleCitySearch(): void
         $stmt->execute($params);
         $cities = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        echo json_encode(['success' => true, 'data' => $cities]);
+        $result = ['success' => true, 'data' => $cities];
+        cacheSet($cacheKey, $result);
+        echo json_encode($result);
     } catch (\Exception $e) {
         http_response_code(500);
         echo json_encode(['success' => false, 'error' => 'Database error: ' . $e->getMessage()]);
@@ -148,6 +190,13 @@ function handlePlacesSearch(): void
 
     if (strlen($query) < 2) {
         echo json_encode(['items' => []]);
+        return;
+    }
+
+    $cacheKey = "places:" . strtolower($query) . ":{$country}";
+    $cached = cacheGet($cacheKey);
+    if ($cached !== false) {
+        echo json_encode($cached);
         return;
     }
 
@@ -179,7 +228,9 @@ function handlePlacesSearch(): void
             ];
         }, $rows);
 
-        echo json_encode(['items' => $items]);
+        $result = ['items' => $items];
+        cacheSet($cacheKey, $result);
+        echo json_encode($result);
     } catch (\Exception $e) {
         http_response_code(500);
         echo json_encode(['error' => 'Database error: ' . $e->getMessage()]);
@@ -188,10 +239,18 @@ function handlePlacesSearch(): void
 
 function handleHealth(): void
 {
+    $cached = cacheGet('health');
+    if ($cached !== false) {
+        echo json_encode($cached);
+        return;
+    }
+
     try {
         $db = getDb();
-        $count = $db->query("SELECT COUNT(*) FROM cityinfo")->fetchColumn();
-        echo json_encode(['status' => 'ok', 'cities' => (int)$count]);
+        $db->query("SELECT 1 FROM cityinfo LIMIT 1")->fetch();
+        $result = ['status' => 'ok'];
+        cacheSet('health', $result);
+        echo json_encode($result);
     } catch (\Exception $e) {
         http_response_code(503);
         echo json_encode(['status' => 'error', 'error' => $e->getMessage()]);

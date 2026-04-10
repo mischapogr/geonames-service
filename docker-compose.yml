@@ -35,6 +35,8 @@ services:
       DB_PASS: geonames
       CORS_ORIGIN: "*"
       API_KEY: ""  # Set to enable API key protection (e.g. API_KEY=my-secret-key)
+      CACHE_TTL: "${CACHE_TTL:-0}"          # APCu cache TTL in seconds (0 = disabled)
+      HTTP_CACHE_TTL: "${HTTP_CACHE_TTL:-0}" # Cache-Control max-age in seconds (0 = disabled)
 
 volumes:
   geonames_data:
