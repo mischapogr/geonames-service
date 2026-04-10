@@ -49,6 +49,8 @@ DB_USER="${DB_USER:-geonames}"
 DB_PASS="${DB_PASS:-}"
 CORS_ORIGIN="${CORS_ORIGIN:-*}"
 API_KEY="${API_KEY:-}"
+CACHE_TTL="${CACHE_TTL:-3600}"           # APCu cache TTL in seconds (0 = disabled)
+HTTP_CACHE_TTL="${HTTP_CACHE_TTL:-300}"  # Cache-Control max-age in seconds (0 = disabled)
 
 # ── Deploy files via rsync ───────────────────────────────────────────
 $DRY_RUN && echo "=== DRY RUN — no changes will be made ==="
@@ -102,6 +104,7 @@ rsync ${RSYNC_OPTS} \
     --exclude='package.json' \
     --exclude='package-lock.json' \
     --exclude='docs/' \
+    --exclude='scripts/loadtest' \
     --exclude='.gitignore' \
     --filter='P cgi-bin/' \
     --filter='P .htaccess' \
@@ -136,6 +139,8 @@ putenv('DB_USER=${DB_USER}');
 putenv('DB_PASS=${DB_PASS}');
 putenv('CORS_ORIGIN=${CORS_ORIGIN}');
 putenv('API_KEY=${API_KEY}');
+putenv('CACHE_TTL=${CACHE_TTL}');
+putenv('HTTP_CACHE_TTL=${HTTP_CACHE_TTL}');
 EOF
 
 # ── Create scripts/.env for import scripts on remote host ──────────
