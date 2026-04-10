@@ -58,12 +58,42 @@ function getDb(): PDO
 // Routing
 $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 
-match ($uri) {
-    '/api/cities/search' => handleCitySearch(),
-    '/api/places' => handlePlacesSearch(),
-    '/health' => handleHealth(),
-    default => handleNotFound(),
-};
+if (preg_match('#^/api/cities/(\d+)$#', $uri, $matches)) {
+    handleCityById((int) $matches[1]);
+} else {
+    match ($uri) {
+        '/api/cities/search' => handleCitySearch(),
+        '/api/places' => handlePlacesSearch(),
+        '/health' => handleHealth(),
+        default => handleNotFound(),
+    };
+}
+
+function handleCityById(int $geonameid): void
+{
+    try {
+        $db = getDb();
+        $stmt = $db->prepare("
+            SELECT geonameid, name, latitude, longitude, country, state, timezone, population
+            FROM cityinfo
+            WHERE geonameid = :id
+            LIMIT 1
+        ");
+        $stmt->execute([':id' => $geonameid]);
+        $city = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$city) {
+            http_response_code(404);
+            echo json_encode(['success' => false, 'error' => 'City not found']);
+            return;
+        }
+
+        echo json_encode(['success' => true, 'data' => $city]);
+    } catch (\Exception $e) {
+        http_response_code(500);
+        echo json_encode(['success' => false, 'error' => 'Database error: ' . $e->getMessage()]);
+    }
+}
 
 function handleCitySearch(): void
 {
