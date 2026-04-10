@@ -95,6 +95,13 @@ rsync ${RSYNC_OPTS} \
     --exclude='composer.json' \
     --exclude='composer.lock' \
     --exclude='vendor/' \
+    --exclude='playwright.config.ts' \
+    --exclude='playwright-report/' \
+    --exclude='test-results/' \
+    --exclude='node_modules/' \
+    --exclude='package.json' \
+    --exclude='package-lock.json' \
+    --exclude='docs/' \
     --exclude='.gitignore' \
     --filter='P cgi-bin/' \
     --filter='P .htaccess' \
