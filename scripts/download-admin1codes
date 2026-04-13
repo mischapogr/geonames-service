@@ -1,0 +1,29 @@
+#!/bin/bash
+#
+# Download admin1CodesASCII.txt from GeoNames
+# Maps country.admin1 codes to human-readable names
+#
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+DOWNLOAD_URL="http://download.geonames.org/export/dump/admin1CodesASCII.txt"
+TXT_FILE="$PROJECT_ROOT/data/admin1CodesASCII.txt"
+
+if [ -f "$TXT_FILE" ]; then
+    echo "admin1CodesASCII.txt already exists"
+    exit 0
+fi
+
+echo "Downloading admin1CodesASCII.txt..."
+if command -v wget &> /dev/null; then
+    wget -q -O "$TXT_FILE" "$DOWNLOAD_URL"
+elif command -v curl &> /dev/null; then
+    curl -sL -o "$TXT_FILE" "$DOWNLOAD_URL"
+else
+    echo "Error: Neither wget nor curl is available"
+    exit 1
+fi
+
+LINE_COUNT=$(wc -l < "$TXT_FILE")
+echo "Done: $TXT_FILE ($LINE_COUNT entries)"

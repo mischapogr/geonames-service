@@ -19,14 +19,21 @@ if [ -z "$1" ]; then
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 source "$SCRIPT_DIR/_db"
 
 GEONAMES_FILE="$1"
 FILTER_MODE="${2:-all}"
+ADMIN1_FILE="$PROJECT_ROOT/data/admin1CodesASCII.txt"
 
 if [ ! -f "$GEONAMES_FILE" ]; then
     echo "Error: File not found: $GEONAMES_FILE"
     exit 1
+fi
+
+# Ensure admin1 codes lookup file exists
+if [ ! -f "$ADMIN1_FILE" ]; then
+    "$SCRIPT_DIR/download-admin1codes"
 fi
 
 echo "=========================================="
@@ -48,18 +55,24 @@ echo "Preparing filtered data..."
 if [ "$FILTER_MODE" = "cities" ]; then
     echo "Filtering: feature_class=P (all populated places)..."
     awk -F'\t' 'BEGIN { OFS="\t" }
+    NR==FNR { split($1, k, "."); admin1[k[1] "." k[2]] = $2; next }
     {
         fc = $7; pop = $15+0
         if (fc == "P") {
-            print $1, $2, $5, $6, $9, $11, $18, pop
+            key = $9 "." $11
+            state = (key in admin1) ? admin1[key] : $11
+            print $1, $2, $5, $6, $9, state, $18, pop
         }
-    }' "$GEONAMES_FILE" > "$TMP_TSV"
+    }' "$ADMIN1_FILE" "$GEONAMES_FILE" > "$TMP_TSV"
 else
     awk -F'\t' 'BEGIN { OFS="\t" }
+    NR==FNR { split($1, k, "."); admin1[k[1] "." k[2]] = $2; next }
     {
         pop = $15+0
-        print $1, $2, $5, $6, $9, $11, $18, pop
-    }' "$GEONAMES_FILE" > "$TMP_TSV"
+        key = $9 "." $11
+        state = (key in admin1) ? admin1[key] : $11
+        print $1, $2, $5, $6, $9, state, $18, pop
+    }' "$ADMIN1_FILE" "$GEONAMES_FILE" > "$TMP_TSV"
 fi
 
 FILTERED_COUNT=$(wc -l < "$TMP_TSV")
