@@ -27,6 +27,8 @@ services:
       - "8082:80"
     depends_on:
       - database
+    volumes:
+      - ./src:/var/www/html
     environment:
       DB_HOST: database
       DB_PORT: 3306
