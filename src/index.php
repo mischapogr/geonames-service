@@ -147,13 +147,15 @@ function handleCitySearch(): void
 {
     $query = $_GET['q'] ?? '';
     $country = $_GET['country'] ?? '';
+    $minPop = max(0, (int)($_GET['minpop'] ?? 0));
+    $excludeDistricts = ($_GET['no_districts'] ?? '') === '1';
 
     if (strlen($query) < 2) {
         echo json_encode(['success' => true, 'data' => []]);
         return;
     }
 
-    $cacheKey = "search:" . strtolower($query) . ":{$country}";
+    $cacheKey = "search:" . strtolower($query) . ":{$country}:{$minPop}:" . ($excludeDistricts ? '1' : '0');
     $cached = cacheGet($cacheKey);
     if ($cached !== false) {
         echo json_encode($cached);
@@ -170,6 +172,14 @@ function handleCitySearch(): void
             $params['country'] = $country;
         }
 
+        $popFilter = '';
+        if ($minPop > 0) {
+            $popFilter = ' AND (c.population = 0 OR c.population >= :minpop)';
+            $params['minpop'] = $minPop;
+        }
+
+        $districtFilter = $excludeDistricts ? " AND c.feature_code != 'PPLX'" : '';
+
         $params['exact_query'] = $query;
         $params['prefix_query'] = $query . '%';
 
@@ -177,24 +187,24 @@ function handleCitySearch(): void
             (SELECT c.geonameid, c.name, c.name AS matched_name, c.latitude, c.longitude,
                     c.country, c.state, c.timezone, c.population, 0 AS match_rank
              FROM cityinfo c
-             WHERE c.name = :exact_query{$countryFilter})
+             WHERE c.name = :exact_query{$countryFilter}{$popFilter}{$districtFilter})
             UNION ALL
             (SELECT c.geonameid, c.name, a.name AS matched_name, c.latitude, c.longitude,
                     c.country, c.state, c.timezone, c.population, 0 AS match_rank
              FROM city_alt_names a
              JOIN cityinfo c ON c.geonameid = a.geonameid
-             WHERE a.name = :exact_query{$countryFilter})
+             WHERE a.name = :exact_query{$countryFilter}{$popFilter}{$districtFilter})
             UNION ALL
             (SELECT c.geonameid, c.name, c.name AS matched_name, c.latitude, c.longitude,
                     c.country, c.state, c.timezone, c.population, 1 AS match_rank
              FROM cityinfo c
-             WHERE c.name LIKE :prefix_query{$countryFilter} AND c.name != :exact_query)
+             WHERE c.name LIKE :prefix_query{$countryFilter}{$popFilter}{$districtFilter} AND c.name != :exact_query)
             UNION ALL
             (SELECT c.geonameid, c.name, a.name AS matched_name, c.latitude, c.longitude,
                     c.country, c.state, c.timezone, c.population, 2 AS match_rank
              FROM city_alt_names a
              JOIN cityinfo c ON c.geonameid = a.geonameid
-             WHERE a.name LIKE :prefix_query{$countryFilter} AND a.name != :exact_query)
+             WHERE a.name LIKE :prefix_query{$countryFilter}{$popFilter}{$districtFilter} AND a.name != :exact_query)
             ORDER BY match_rank ASC, population DESC
             LIMIT 40
         ";
@@ -230,13 +240,15 @@ function handlePlacesSearch(): void
 {
     $query = $_GET['q'] ?? '';
     $country = $_GET['country'] ?? '';
+    $minPop = max(0, (int)($_GET['minpop'] ?? 0));
+    $excludeDistricts = ($_GET['no_districts'] ?? '') === '1';
 
     if (strlen($query) < 2) {
         echo json_encode(['items' => []]);
         return;
     }
 
-    $cacheKey = "places:" . strtolower($query) . ":{$country}";
+    $cacheKey = "places:" . strtolower($query) . ":{$country}:{$minPop}:" . ($excludeDistricts ? '1' : '0');
     $cached = cacheGet($cacheKey);
     if ($cached !== false) {
         echo json_encode($cached);
@@ -253,6 +265,14 @@ function handlePlacesSearch(): void
             $params['country'] = $country;
         }
 
+        $popFilter = '';
+        if ($minPop > 0) {
+            $popFilter = ' AND (c.population = 0 OR c.population >= :minpop)';
+            $params['minpop'] = $minPop;
+        }
+
+        $districtFilter = $excludeDistricts ? " AND c.feature_code != 'PPLX'" : '';
+
         $params['exact_query'] = $query;
         $params['prefix_query'] = $query . '%';
 
@@ -260,24 +280,24 @@ function handlePlacesSearch(): void
             (SELECT c.geonameid, c.name, c.name AS matched_name, c.latitude, c.longitude,
                     c.country, c.state, c.timezone, c.population, 0 AS match_rank
              FROM cityinfo c
-             WHERE c.name = :exact_query{$countryFilter})
+             WHERE c.name = :exact_query{$countryFilter}{$popFilter}{$districtFilter})
             UNION ALL
             (SELECT c.geonameid, c.name, a.name AS matched_name, c.latitude, c.longitude,
                     c.country, c.state, c.timezone, c.population, 0 AS match_rank
              FROM city_alt_names a
              JOIN cityinfo c ON c.geonameid = a.geonameid
-             WHERE a.name = :exact_query{$countryFilter})
+             WHERE a.name = :exact_query{$countryFilter}{$popFilter}{$districtFilter})
             UNION ALL
             (SELECT c.geonameid, c.name, c.name AS matched_name, c.latitude, c.longitude,
                     c.country, c.state, c.timezone, c.population, 1 AS match_rank
              FROM cityinfo c
-             WHERE c.name LIKE :prefix_query{$countryFilter} AND c.name != :exact_query)
+             WHERE c.name LIKE :prefix_query{$countryFilter}{$popFilter}{$districtFilter} AND c.name != :exact_query)
             UNION ALL
             (SELECT c.geonameid, c.name, a.name AS matched_name, c.latitude, c.longitude,
                     c.country, c.state, c.timezone, c.population, 2 AS match_rank
              FROM city_alt_names a
              JOIN cityinfo c ON c.geonameid = a.geonameid
-             WHERE a.name LIKE :prefix_query{$countryFilter} AND a.name != :exact_query)
+             WHERE a.name LIKE :prefix_query{$countryFilter}{$popFilter}{$districtFilter} AND a.name != :exact_query)
             ORDER BY match_rank ASC, population DESC
             LIMIT 40
         ";
