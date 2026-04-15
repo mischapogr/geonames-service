@@ -95,7 +95,8 @@ if (preg_match('#^/api/cities/(\d+)$#', $uri, $matches)) {
 
 function handleCityById(int $geonameid): void
 {
-    $cacheKey = "city:{$geonameid}";
+    $lang = $_GET['lang'] ?? '';
+    $cacheKey = "city:{$geonameid}:{$lang}";
     $cached = cacheGet($cacheKey);
     if ($cached !== false) {
         echo json_encode($cached);
@@ -117,6 +118,20 @@ function handleCityById(int $geonameid): void
             http_response_code(404);
             echo json_encode(['success' => false, 'error' => 'City not found']);
             return;
+        }
+
+        if ($lang !== '') {
+            $altStmt = $db->prepare("
+                SELECT name FROM city_alt_names
+                WHERE geonameid = :id AND lang = :lang
+                ORDER BY is_preferred DESC
+                LIMIT 1
+            ");
+            $altStmt->execute([':id' => $geonameid, ':lang' => $lang]);
+            $alt = $altStmt->fetch(PDO::FETCH_ASSOC);
+            if ($alt) {
+                $city['local_name'] = $alt['name'];
+            }
         }
 
         $result = ['success' => true, 'data' => $city];
@@ -148,31 +163,59 @@ function handleCitySearch(): void
     try {
         $db = getDb();
         $countryFilter = '';
-        $params = ['query' => $query . '%'];
+        $params = [];
 
         if ($country !== '') {
             $countryFilter = ' AND c.country = :country';
             $params['country'] = $country;
         }
 
+        $params['exact_query'] = $query;
+        $params['prefix_query'] = $query . '%';
+
         $sql = "
             (SELECT c.geonameid, c.name, c.name AS matched_name, c.latitude, c.longitude,
-                    c.country, c.state, c.timezone, c.population
+                    c.country, c.state, c.timezone, c.population, 0 AS match_rank
              FROM cityinfo c
-             WHERE c.name LIKE :query{$countryFilter})
-            UNION
+             WHERE c.name = :exact_query{$countryFilter})
+            UNION ALL
             (SELECT c.geonameid, c.name, a.name AS matched_name, c.latitude, c.longitude,
-                    c.country, c.state, c.timezone, c.population
+                    c.country, c.state, c.timezone, c.population, 0 AS match_rank
              FROM city_alt_names a
              JOIN cityinfo c ON c.geonameid = a.geonameid
-             WHERE a.name LIKE :query{$countryFilter})
-            ORDER BY population DESC
-            LIMIT 20
+             WHERE a.name = :exact_query{$countryFilter})
+            UNION ALL
+            (SELECT c.geonameid, c.name, c.name AS matched_name, c.latitude, c.longitude,
+                    c.country, c.state, c.timezone, c.population, 1 AS match_rank
+             FROM cityinfo c
+             WHERE c.name LIKE :prefix_query{$countryFilter} AND c.name != :exact_query)
+            UNION ALL
+            (SELECT c.geonameid, c.name, a.name AS matched_name, c.latitude, c.longitude,
+                    c.country, c.state, c.timezone, c.population, 2 AS match_rank
+             FROM city_alt_names a
+             JOIN cityinfo c ON c.geonameid = a.geonameid
+             WHERE a.name LIKE :prefix_query{$countryFilter} AND a.name != :exact_query)
+            ORDER BY match_rank ASC, population DESC
+            LIMIT 40
         ";
 
         $stmt = $db->prepare($sql);
         $stmt->execute($params);
-        $cities = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $seen = [];
+        $cities = [];
+        foreach ($rows as $row) {
+            if (isset($seen[$row['geonameid']])) {
+                continue;
+            }
+            $seen[$row['geonameid']] = true;
+            unset($row['match_rank']);
+            $cities[] = $row;
+            if (count($cities) >= 20) {
+                break;
+            }
+        }
 
         $result = ['success' => true, 'data' => $cities];
         cacheSet($cacheKey, $result);
@@ -202,26 +245,70 @@ function handlePlacesSearch(): void
 
     try {
         $db = getDb();
-        $sql = "SELECT geonameid, name, latitude, longitude, country, state, timezone
-                FROM cityinfo
-                WHERE name LIKE :query";
-        $params = ['query' => $query . '%'];
+        $countryFilter = '';
+        $params = [];
 
         if ($country !== '') {
-            $sql .= " AND country = :country";
+            $countryFilter = ' AND c.country = :country';
             $params['country'] = $country;
         }
 
-        $sql .= " ORDER BY name LIMIT 20";
+        $params['exact_query'] = $query;
+        $params['prefix_query'] = $query . '%';
+
+        $sql = "
+            (SELECT c.geonameid, c.name, c.name AS matched_name, c.latitude, c.longitude,
+                    c.country, c.state, c.timezone, c.population, 0 AS match_rank
+             FROM cityinfo c
+             WHERE c.name = :exact_query{$countryFilter})
+            UNION ALL
+            (SELECT c.geonameid, c.name, a.name AS matched_name, c.latitude, c.longitude,
+                    c.country, c.state, c.timezone, c.population, 0 AS match_rank
+             FROM city_alt_names a
+             JOIN cityinfo c ON c.geonameid = a.geonameid
+             WHERE a.name = :exact_query{$countryFilter})
+            UNION ALL
+            (SELECT c.geonameid, c.name, c.name AS matched_name, c.latitude, c.longitude,
+                    c.country, c.state, c.timezone, c.population, 1 AS match_rank
+             FROM cityinfo c
+             WHERE c.name LIKE :prefix_query{$countryFilter} AND c.name != :exact_query)
+            UNION ALL
+            (SELECT c.geonameid, c.name, a.name AS matched_name, c.latitude, c.longitude,
+                    c.country, c.state, c.timezone, c.population, 2 AS match_rank
+             FROM city_alt_names a
+             JOIN cityinfo c ON c.geonameid = a.geonameid
+             WHERE a.name LIKE :prefix_query{$countryFilter} AND a.name != :exact_query)
+            ORDER BY match_rank ASC, population DESC
+            LIMIT 40
+        ";
 
         $stmt = $db->prepare($sql);
         $stmt->execute($params);
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+        $seen = [];
+        $unique = [];
+        foreach ($rows as $row) {
+            if (isset($seen[$row['geonameid']])) {
+                continue;
+            }
+            $seen[$row['geonameid']] = true;
+            $unique[] = $row;
+            if (count($unique) >= 20) {
+                break;
+            }
+        }
+        $rows = $unique;
+
         $items = array_map(function (array $row) {
+            $label = $row['name'];
+            if (strcasecmp($row['matched_name'], $row['name']) !== 0) {
+                $label .= ' (' . $row['matched_name'] . ')';
+            }
+            $label .= ($row['state'] ? ', ' . $row['state'] : '') . ', ' . $row['country'];
             return [
                 'placeId' => 'geo:' . $row['geonameid'],
-                'label' => $row['name'] . ($row['state'] ? ', ' . $row['state'] : '') . ', ' . $row['country'],
+                'label' => $label,
                 'lat' => (float)$row['latitude'],
                 'lon' => (float)$row['longitude'],
                 'timezone' => $row['timezone'],

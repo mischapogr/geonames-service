@@ -25,15 +25,34 @@ source "$SCRIPT_DIR/_db"
 GEONAMES_FILE="$1"
 FILTER_MODE="${2:-all}"
 ADMIN1_FILE="$PROJECT_ROOT/data/admin1CodesASCII.txt"
+ADMIN1_LOCAL_FILE="$PROJECT_ROOT/data/admin1-local-names.tsv"
 
 if [ ! -f "$GEONAMES_FILE" ]; then
     echo "Error: File not found: $GEONAMES_FILE"
     exit 1
 fi
 
-# Ensure admin1 codes lookup file exists
+# Ensure admin1 codes lookup file exists (English fallback)
 if [ ! -f "$ADMIN1_FILE" ]; then
     "$SCRIPT_DIR/download-admin1codes"
+fi
+
+# Build admin1 name lookup with native/local names
+echo "Building admin1 name lookup..."
+if [ -f "$ADMIN1_LOCAL_FILE" ]; then
+    echo "Using cached local admin1 names: $(wc -l < "$ADMIN1_LOCAL_FILE") entries"
+else
+    # Try to extract from allCountries.txt if available
+    ALL_COUNTRIES="$PROJECT_ROOT/data/allCountries.txt"
+    if [ -f "$ALL_COUNTRIES" ]; then
+        echo "Extracting ADM1 local names from allCountries.txt..."
+        awk -F'\t' '$7=="A" && $8=="ADM1" { print $9 "." $11 "\t" $2 }' "$ALL_COUNTRIES" > "$ADMIN1_LOCAL_FILE"
+        echo "Extracted: $(wc -l < "$ADMIN1_LOCAL_FILE") entries"
+    else
+        echo "No local admin1 names available (run ./scripts/download-allcountries first)"
+        echo "Falling back to admin1CodesASCII.txt (English names)"
+        ADMIN1_LOCAL_FILE="/dev/null"
+    fi
 fi
 
 echo "=========================================="
@@ -55,24 +74,30 @@ echo "Preparing filtered data..."
 if [ "$FILTER_MODE" = "cities" ]; then
     echo "Filtering: feature_class=P (all populated places)..."
     awk -F'\t' 'BEGIN { OFS="\t" }
-    NR==FNR { split($1, k, "."); admin1[k[1] "." k[2]] = $2; next }
+    FILENAME==ARGV[1] { local[$1] = $2; next }
+    FILENAME==ARGV[2] { split($1, k, "."); admin1[k[1] "." k[2]] = $2; next }
     {
         fc = $7; pop = $15+0
         if (fc == "P") {
             key = $9 "." $11
-            state = (key in admin1) ? admin1[key] : $11
+            if (key in local) state = local[key]
+            else if (key in admin1) state = admin1[key]
+            else state = $11
             print $1, $2, $5, $6, $9, state, $18, pop
         }
-    }' "$ADMIN1_FILE" "$GEONAMES_FILE" > "$TMP_TSV"
+    }' "$ADMIN1_LOCAL_FILE" "$ADMIN1_FILE" "$GEONAMES_FILE" > "$TMP_TSV"
 else
     awk -F'\t' 'BEGIN { OFS="\t" }
-    NR==FNR { split($1, k, "."); admin1[k[1] "." k[2]] = $2; next }
+    FILENAME==ARGV[1] { local[$1] = $2; next }
+    FILENAME==ARGV[2] { split($1, k, "."); admin1[k[1] "." k[2]] = $2; next }
     {
         pop = $15+0
         key = $9 "." $11
-        state = (key in admin1) ? admin1[key] : $11
+        if (key in local) state = local[key]
+        else if (key in admin1) state = admin1[key]
+        else state = $11
         print $1, $2, $5, $6, $9, state, $18, pop
-    }' "$ADMIN1_FILE" "$GEONAMES_FILE" > "$TMP_TSV"
+    }' "$ADMIN1_LOCAL_FILE" "$ADMIN1_FILE" "$GEONAMES_FILE" > "$TMP_TSV"
 fi
 
 FILTERED_COUNT=$(wc -l < "$TMP_TSV")
