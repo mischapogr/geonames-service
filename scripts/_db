@@ -37,7 +37,7 @@ fi
 #        echo "SELECT 1" | run_mysql
 run_mysql() {
     if [[ "$DB_MODE" == "docker" ]]; then
-        docker compose exec -T database mysql -u geonames -pgeonames geonames "$@"
+        docker compose exec -T database mysql -ugeonames -pgeonames geonames "$@"
     else
         mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" "$@"
     fi
