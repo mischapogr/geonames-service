@@ -40,5 +40,21 @@ services:
       CACHE_TTL: "${CACHE_TTL:-0}"          # APCu cache TTL in seconds (0 = disabled)
       HTTP_CACHE_TTL: "${HTTP_CACHE_TTL:-0}" # Cache-Control max-age in seconds (0 = disabled)
 
+  # Reverse proxy to production — bypasses the local DB.
+  # Off by default (profile "proxy"); start on demand via ./scripts/proxy-prod
+  # or: docker compose --profile proxy up proxy
+  proxy:
+    image: caddy:2-alpine
+    container_name: geonames-proxy
+    profiles: ["proxy"]
+    ports:
+      - "${PROXY_PORT:-8082}:80"
+    # --change-host-header sets Host + TLS SNI to the upstream vhost.
+    command: >
+      caddy reverse-proxy
+      --from :80
+      --to ${PROXY_UPSTREAM:-https://geonames.example.com}
+      --change-host-header
+
 volumes:
   geonames_data:

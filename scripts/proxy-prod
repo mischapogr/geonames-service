@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+#
+# Proxy local API requests to production (bypasses the local DB).
+#
+# Stops the local `app` container and starts the Compose `proxy` service
+# (Caddy) in its place, so http://localhost:8082 is served by
+# https://geonames.example.com. No MySQL container, no dataset import.
+#
+# The proxy service is off by default (Compose profile "proxy"); this script
+# is the on-demand way to bring it up.
+#
+# Usage:
+#   ./scripts/proxy-prod                       # proxy :8082 -> production
+#   PORT=9000 ./scripts/proxy-prod             # use a different local port
+#   UPSTREAM=https://other.host ./scripts/proxy-prod
+#
+# Stop with Ctrl-C (also stops the proxy container).
+#
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$PROJECT_ROOT"
+
+# Compose reads these for port mapping and the upstream target.
+export PROXY_PORT="${PORT:-${PROXY_PORT:-8082}}"
+export PROXY_UPSTREAM="${UPSTREAM:-${PROXY_UPSTREAM:-https://geonames.example.com}}"
+
+if ! command -v docker >/dev/null 2>&1; then
+    echo "Error: docker is required" >&2
+    exit 1
+fi
+
+echo "=========================================="
+echo "GeoNames Proxy -> Production"
+echo "=========================================="
+echo ""
+echo "Local:    http://localhost:${PROXY_PORT}"
+echo "Upstream: ${PROXY_UPSTREAM}"
+echo ""
+
+# Free :8082 — the app and proxy both bind it, and the app is useless
+# without its DB in proxy mode anyway.
+if docker ps --format '{{.Names}}' | grep -q '^geonames-app$'; then
+    echo "Stopping app container to free the port..."
+    docker compose stop app
+    echo ""
+fi
+
+# Stop the proxy container on Ctrl-C / exit so the port is released cleanly.
+cleanup() {
+    echo ""
+    echo "Stopping proxy..."
+    docker compose --profile proxy stop proxy >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
+
+echo "Test it:"
+echo "  curl \"http://localhost:${PROXY_PORT}/api/cities/search?q=Zur\""
+echo ""
+echo "Press Ctrl-C to stop."
+echo ""
+
+docker compose --profile proxy up proxy
