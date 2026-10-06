@@ -60,5 +60,10 @@ services:
       --to ${PROXY_UPSTREAM:-https://geonames.example.com}
       --change-host-header
 
+networks:
+  default:
+    labels:
+      keep: "true"
+
 volumes:
   geonames_data:
