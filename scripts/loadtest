@@ -128,7 +128,7 @@ SYS_KERNEL=$(uname -r)
 cat > "$REPORT_FILE" <<EOF
 # Load Test Results
 
-**Date:** $(date '+%Y-%m-%d %H:%M')
+**Date:** $(date '+%Y-%m-%d')
 **Tool:** Apache Bench (ab) — ${REQUESTS} requests, ${CONCURRENCY} concurrent
 
 ## System
