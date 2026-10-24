@@ -9,6 +9,14 @@ curated summary.
 
 ## [Unreleased]
 
+### Changed
+
+- The Docker image defaults to PHP 8.5 instead of 8.3. A benchmark across PHP
+  8.1 to 8.5 showed no throughput difference beyond measurement noise, and 8.5
+  has the longest upstream support.
+
+## [1.5.1] - 2026-10-24
+
 ### Security
 
 - `src/cache-clear.php` requires the API key whenever `API_KEY` is set, read
@@ -122,7 +130,8 @@ Requests without the new parameters, or with neutral values such as
   hosting.
 - PHPUnit end-to-end suite and semantic-release on `main`.
 
-[Unreleased]: https://github.com/mischapogr/geonames-service/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/mischapogr/geonames-service/compare/v1.5.1...HEAD
+[1.5.1]: https://github.com/mischapogr/geonames-service/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/mischapogr/geonames-service/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/mischapogr/geonames-service/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/mischapogr/geonames-service/compare/v1.2.0...v1.3.0

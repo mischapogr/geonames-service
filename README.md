@@ -49,7 +49,7 @@ a sensible ranking, and the timezone of the result. This service does exactly
 that and nothing more.
 
 - **One PHP file, no runtime dependencies.** `src/index.php` holds routing,
-  queries, and caching. It runs wherever PHP 8.3 with PDO MySQL runs,
+  queries, and caching. It runs wherever PHP 8.1 or newer with PDO MySQL runs,
   including shared hosting without shell daemons or containers.
 - **Your data stays yours.** Searches never leave your server.
 - **Additive API.** New behaviour arrives as opt-in query parameters; a request
@@ -67,14 +67,15 @@ that and nothing more.
 ### Supported PHP versions
 
 CI runs the full end-to-end suite against every version marked as tested. The
-Docker image defaults to PHP 8.3; build another with
-`PHP_VERSION=8.5 docker compose up -d --build`.
+Docker image defaults to PHP 8.5; build another with
+`PHP_VERSION=8.1 docker compose up -d --build`. Throughput is the same on all
+tested versions within measurement noise, so pick by upstream support.
 
 | PHP | This project | PHP upstream |
 | --- | --- | --- |
-| 8.5 | Tested | Active support |
+| 8.5 | Tested, Docker default | Active support |
 | 8.4 | Tested | Active support |
-| 8.3 | Tested, Docker default | Security fixes only |
+| 8.3 | Tested | Security fixes only |
 | 8.2 | Tested | Security fixes until 2026-12-31 |
 | 8.1 | Tested | End of life since 2025-12-31; upgrade when you can |
 | 8.0 | Not supported | End of life |

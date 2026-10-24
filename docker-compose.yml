@@ -25,7 +25,7 @@ services:
     build:
       context: .
       args:
-        PHP_VERSION: "${PHP_VERSION:-8.3}"  # e.g. PHP_VERSION=8.5 docker compose up -d --build
+        PHP_VERSION: "${PHP_VERSION:-8.5}"  # e.g. PHP_VERSION=8.1 docker compose up -d --build
     container_name: geonames-app
     restart: unless-stopped
     labels:

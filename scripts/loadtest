@@ -140,7 +140,7 @@ cat > "$REPORT_FILE" <<EOF
 | RAM | ${SYS_RAM} |
 | Kernel | ${SYS_KERNEL} |
 | Docker | $(docker --version 2>/dev/null | awk '{print $3}' | tr -d ',') |
-| PHP | $(docker exec geonames-app php -v 2>/dev/null | head -1 | awk '{print $2}' || echo "8.3") |
+| PHP | $(docker exec geonames-app php -r 'echo PHP_VERSION;' 2>/dev/null || echo "unknown") |
 
 ## Endpoints tested
 

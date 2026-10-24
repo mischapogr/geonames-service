@@ -1,6 +1,6 @@
 # geonames-service agent guide
 
-PHP 8.3 REST API for city/location autocomplete, powered by GeoNames data. Runs in Docker (Apache + MySQL)
+PHP REST API (PHP 8.1 to 8.5) for city/location autocomplete, powered by GeoNames data. Runs in Docker (Apache + MySQL)
 for development and on plain PHP + MySQL hosting in production. This file is the shared guidance for
 coding agents and human contributors; [CONTRIBUTING.md](CONTRIBUTING.md) has the checks a change needs.
 
@@ -10,7 +10,7 @@ coding agents and human contributors; [CONTRIBUTING.md](CONTRIBUTING.md) has the
 - Database: MySQL 8 with tables `cityinfo` and `city_alt_names`
 - Migrations in `migrations/` (plain SQL, applied in order)
 - Import/download scripts in `scripts/` (bash)
-- Docker setup: `Dockerfile` (php:8.3-apache), `docker-compose.yml`
+- Docker setup: `Dockerfile` (php:${PHP_VERSION}-apache, default 8.5), `docker-compose.yml`
 
 ## Development
 

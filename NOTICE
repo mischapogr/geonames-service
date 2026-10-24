@@ -29,7 +29,7 @@ serves it must credit GeoNames (https://www.geonames.org/).
 This project runs on the following separately distributed components.
 Their licences govern their own use:
 
-  - PHP (php:8.3-apache image) ..................... PHP License 3.01
+  - PHP (php:8.5-apache image) ..................... PHP License 3.01
   - Apache HTTP Server ............................. Apache-2.0
   - APCu ........................................... PHP License 3.01
   - MySQL Community Server 8.0 ..................... GPL-2.0 with the

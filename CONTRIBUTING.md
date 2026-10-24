@@ -31,7 +31,7 @@ curl "http://localhost:8082/api/cities/search?q=Zur"
 # PHP syntax on the oldest and newest supported version
 for v in 8.1 8.5; do docker run --rm -v "$PWD/src:/src:ro" php:$v-cli php -l /src/index.php; done
 
-# Run the stack on another PHP version (default 8.3)
+# Run the stack on another PHP version (default 8.5)
 PHP_VERSION=8.1 docker compose up -d --build app
 
 # End-to-end suite against the running stack on :8082
