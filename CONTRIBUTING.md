@@ -20,7 +20,7 @@ MySQL on the host: all of them run from images.
 
 ```sh
 docker compose up -d
-./scripts/download-cities15000     # about 8 MB, about 33,000 places
+./scripts/download-cities15000     # about 3 MB, about 34,000 places
 ./scripts/import-cities15000       # answers a y/n prompt; truncates cityinfo
 curl "http://localhost:8082/api/cities/search?q=Zur"
 ```

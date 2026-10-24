@@ -1,6 +1,8 @@
-# GeoNames City Search Service
+# geonames-service agent guide
 
-PHP 8.3 REST API for city/location autocomplete, powered by GeoNames data. Runs in Docker (Apache + MySQL).
+PHP 8.3 REST API for city/location autocomplete, powered by GeoNames data. Runs in Docker (Apache + MySQL)
+for development and on plain PHP + MySQL hosting in production. This file is the shared guidance for
+coding agents and human contributors; [CONTRIBUTING.md](CONTRIBUTING.md) has the checks a change needs.
 
 ## Architecture
 
@@ -17,7 +19,9 @@ PHP 8.3 REST API for city/location autocomplete, powered by GeoNames data. Runs 
 docker compose up -d
 
 # Import dev dataset
-./scripts/download-cities15000./scripts/import-cities15000
+./scripts/download-cities15000
+./scripts/import-cities15000
+
 # Test
 curl "http://localhost:8082/api/cities/search?q=Zur"
 ```
@@ -63,4 +67,8 @@ only `q` and `country` are unaffected. The E2E suite pins this.
 - CORS is configured via `CORS_ORIGIN` env var
 - Optional API key auth via `API_KEY` env var (header `X-Api-Key` or query `api_key`)
 - Config is entirely via environment variables in `docker-compose.yml`
-- No external PHP dependencies (no Composer)
+- No runtime PHP dependencies; Composer only installs PHPUnit for the E2E suite
+- New query parameters are opt-in; a request without them must return byte-identical responses
+- Migrations are numbered and never edited after they ship; the deploy loop re-applies every file
+  and ignores errors, so a migration must be harmless when it runs again
+- Commit messages follow Conventional Commits; semantic-release cuts releases from them
