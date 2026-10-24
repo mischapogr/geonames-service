@@ -39,6 +39,8 @@ if [[ -z "${SUBDOMAIN}" || "${SUBDOMAIN}" == *".."* || "${SUBDOMAIN}" == /* || !
     exit 1
 fi
 
+# The tilde is expanded by the remote shell (rsync/ssh target), not locally.
+# shellcheck disable=SC2088
 REMOTE_ROOT="~/public_html/${SUBDOMAIN}"
 
 # Database credentials on remote host (set via env or .env.deploy)

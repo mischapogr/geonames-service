@@ -7,6 +7,8 @@
 # Provides: run_mysql, load_data_file
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Used by the scripts that source this file
+# shellcheck disable=SC2034
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # Detect environment
@@ -54,7 +56,8 @@ load_data_file() {
     if [[ "$DB_MODE" == "docker" ]]; then
         local container
         container=$(docker compose ps -q database)
-        local remote_path="/var/lib/mysql-files/$(basename "$local_file")"
+        local remote_path
+        remote_path="/var/lib/mysql-files/$(basename "$local_file")"
         docker cp "$local_file" "$container:$remote_path"
         run_mysql -e "LOAD DATA INFILE '$remote_path'
             INTO TABLE $table

@@ -34,7 +34,7 @@ mkdir -p "$REPORT_DIR"
 # ── Helper functions ──────────────────────────────────────────────
 wait_for_app() {
     echo "  Waiting for app to be ready..."
-    for i in $(seq 1 30); do
+    for _ in $(seq 1 30); do
         if curl -sf "${BASE_URL}/health" >/dev/null 2>&1; then
             echo "  App ready."
             return 0
@@ -98,7 +98,7 @@ parse_ab() {
 run_warmup() {
     local endpoint="$1"
     # Warm up with a few requests to prime connections and caches
-    for i in $(seq 1 5); do
+    for _ in $(seq 1 5); do
         curl -sf "${BASE_URL}${endpoint}" >/dev/null 2>&1 || true
     done
 }
