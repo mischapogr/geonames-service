@@ -27,6 +27,8 @@ echo "Source: $DATA_FILE"
 echo "Records: $LINE_COUNT"
 echo ""
 
+require_column cityinfo feature_code 005-add-feature-code.sql
+
 read -p "This will truncate the cityinfo table. Continue? (y/n) " -n 1 -r
 echo ""
 if [[ ! $REPLY =~ ^[Yy]$ ]]; then

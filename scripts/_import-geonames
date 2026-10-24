@@ -32,6 +32,8 @@ if [ ! -f "$GEONAMES_FILE" ]; then
     exit 1
 fi
 
+require_column cityinfo feature_code 005-add-feature-code.sql
+
 # Ensure admin1 codes lookup file exists (English fallback)
 if [ ! -f "$ADMIN1_FILE" ]; then
     "$SCRIPT_DIR/download-admin1codes"
@@ -83,7 +85,7 @@ if [ "$FILTER_MODE" = "cities" ]; then
             if (key in local) state = local[key]
             else if (key in admin1) state = admin1[key]
             else state = $11
-            print $1, $2, $5, $6, $9, state, $18, pop
+            print $1, $2, $5, $6, $9, state, $18, pop, $8
         }
     }' "$ADMIN1_LOCAL_FILE" "$ADMIN1_FILE" "$GEONAMES_FILE" > "$TMP_TSV"
 else
@@ -96,7 +98,7 @@ else
         if (key in local) state = local[key]
         else if (key in admin1) state = admin1[key]
         else state = $11
-        print $1, $2, $5, $6, $9, state, $18, pop
+        print $1, $2, $5, $6, $9, state, $18, pop, $8
     }' "$ADMIN1_LOCAL_FILE" "$ADMIN1_FILE" "$GEONAMES_FILE" > "$TMP_TSV"
 fi
 
@@ -112,7 +114,7 @@ fi
 
 echo "Importing to database..."
 
-load_data_file "$TMP_TSV" "cityinfo" "(geonameid, name, latitude, longitude, country, state, timezone, population)"
+load_data_file "$TMP_TSV" "cityinfo" "(geonameid, name, latitude, longitude, country, state, timezone, population, feature_code)"
 
 echo ""
 echo "Verifying import..."

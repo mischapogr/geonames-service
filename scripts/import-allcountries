@@ -30,6 +30,8 @@ echo "Will filter to: ~5M+ populated places (feature class P)"
 echo "Import time: 5-15 minutes"
 echo ""
 
+require_column cityinfo feature_code 005-add-feature-code.sql
+
 read -p "This will truncate the cityinfo table. Continue? (y/n) " -n 1 -r
 echo ""
 if [[ ! $REPLY =~ ^[Yy]$ ]]; then

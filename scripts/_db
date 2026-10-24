@@ -72,3 +72,22 @@ load_data_file() {
                 $columns"
     fi
 }
+
+# Abort unless a column exists, so an import never truncates a table it cannot reload
+# Usage: require_column <table> <column> <migration_file>
+# Example: require_column cityinfo feature_code 005-add-feature-code.sql
+require_column() {
+    local table="$1"
+    local column="$2"
+    local migration="$3"
+    local found
+
+    # </dev/null: docker compose exec would otherwise consume the caller's stdin (the y/n prompt)
+    found=$(run_mysql -sN -e "SELECT COUNT(*) FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '$table' AND COLUMN_NAME = '$column'" </dev/null)
+    if [[ "$found" != "1" ]]; then
+        echo "Error: column $table.$column is missing"
+        echo "Apply migrations/$migration first, then re-run this script"
+        exit 1
+    fi
+}

@@ -47,9 +47,14 @@ Production's API key and CORS rules apply as-is to proxied requests.
 
 ## API Endpoints
 
-- `GET /api/cities/search?q=&country=` — full search with alternate names, ordered by population
-- `GET /api/places?q=&country=` — simplified search returning `{items: [...]}`
+- `GET /api/cities/search?q=&country=&minpop=&no_districts=` — full search with alternate names, ordered by population
+- `GET /api/places?q=&country=&minpop=&no_districts=` — simplified search returning `{items: [...]}`
 - `GET /health` — health check with city count
+
+`minpop` and `no_districts` are opt-in filters (see README). Absent or neutral
+values (`minpop=0`, `no_districts` other than `1`) must return byte-identical
+results to an unfiltered request, so existing clients that send `minpop=0` or
+only `q` and `country` are unaffected. The E2E suite pins this.
 
 ## Key Conventions
 
