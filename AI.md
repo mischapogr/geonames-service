@@ -22,16 +22,17 @@ docker compose up -d
 curl "http://localhost:8082/api/cities/search?q=Zur"
 ```
 
-### Proxy to production (no local DB)
+### Proxy to a deployed instance (no local DB)
 
 To develop against live data without standing up MySQL or importing a dataset,
-run a reverse proxy that forwards `localhost:8082` to production:
+run a reverse proxy that forwards `localhost:8082` to a deployed instance:
 
 ```bash
-./scripts/proxy-prod              # proxy :8082 -> https://geonames.example.com
-PORT=9000 ./scripts/proxy-prod    # use a different local port
-UPSTREAM=https://other.host ./scripts/proxy-prod
+UPSTREAM=https://geonames.example.com ./scripts/proxy-prod            # proxy :8082 -> UPSTREAM
+UPSTREAM=https://geonames.example.com PORT=9000 ./scripts/proxy-prod  # different local port
 ```
+
+The script refuses to start without `UPSTREAM`; there is no built-in default.
 
 The proxy is a Caddy service in `docker-compose.yml` gated behind the `proxy`
 profile, so a normal `docker compose up` never starts it. The script stops the
@@ -43,7 +44,7 @@ docker compose stop app
 docker compose --profile proxy up proxy
 ```
 
-Production's API key and CORS rules apply as-is to proxied requests.
+The upstream's API key and CORS rules apply as-is to proxied requests.
 
 ## API Endpoints
 

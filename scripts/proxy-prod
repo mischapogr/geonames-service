@@ -1,18 +1,17 @@
 #!/usr/bin/env bash
 #
-# Proxy local API requests to production (bypasses the local DB).
+# Proxy local API requests to a deployed instance (bypasses the local DB).
 #
 # Stops the local `app` container and starts the Compose `proxy` service
-# (Caddy) in its place, so http://localhost:8082 is served by
-# https://geonames.example.com. No MySQL container, no dataset import.
+# (Caddy) in its place, so http://localhost:8082 is served by the instance
+# at UPSTREAM. No MySQL container, no dataset import.
 #
 # The proxy service is off by default (Compose profile "proxy"); this script
 # is the on-demand way to bring it up.
 #
 # Usage:
-#   ./scripts/proxy-prod                       # proxy :8082 -> production
-#   PORT=9000 ./scripts/proxy-prod             # use a different local port
-#   UPSTREAM=https://other.host ./scripts/proxy-prod
+#   UPSTREAM=https://geonames.example.com ./scripts/proxy-prod
+#   UPSTREAM=https://geonames.example.com PORT=9000 ./scripts/proxy-prod
 #
 # Stop with Ctrl-C (also stops the proxy container).
 #
@@ -24,7 +23,13 @@ cd "$PROJECT_ROOT"
 
 # Compose reads these for port mapping and the upstream target.
 export PROXY_PORT="${PORT:-${PROXY_PORT:-8082}}"
-export PROXY_UPSTREAM="${UPSTREAM:-${PROXY_UPSTREAM:-https://geonames.example.com}}"
+export PROXY_UPSTREAM="${UPSTREAM:-${PROXY_UPSTREAM:-}}"
+
+if [[ -z "$PROXY_UPSTREAM" ]]; then
+    echo "Error: set UPSTREAM to the instance to proxy, e.g." >&2
+    echo "  UPSTREAM=https://geonames.example.com $0" >&2
+    exit 1
+fi
 
 if ! command -v docker >/dev/null 2>&1; then
     echo "Error: docker is required" >&2
@@ -32,7 +37,7 @@ if ! command -v docker >/dev/null 2>&1; then
 fi
 
 echo "=========================================="
-echo "GeoNames Proxy -> Production"
+echo "GeoNames Proxy -> Upstream"
 echo "=========================================="
 echo ""
 echo "Local:    http://localhost:${PROXY_PORT}"
