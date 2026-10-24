@@ -9,6 +9,12 @@ curated summary.
 
 ## [Unreleased]
 
+### Security
+
+- `src/cache-clear.php` requires the API key whenever `API_KEY` is set, read
+  from the environment or `src/.env.php` like the API itself. Before, anyone
+  could clear the APCu cache of a deployed instance.
+
 ### Changed
 
 - Relicensed from MIT to the Apache License 2.0; added a `NOTICE` file that

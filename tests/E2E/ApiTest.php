@@ -160,6 +160,16 @@ final class ApiTest extends TestCase
         $this->assertSame('Not found', $res['body']['error']);
     }
 
+    public function testCacheClearWithoutConfiguredKey(): void
+    {
+        // The E2E stack runs without API_KEY, so this covers the open case only.
+        $res = $this->fetch('/cache-clear.php');
+
+        $this->assertSame(200, $res['status']);
+        $this->assertStringStartsWith('application/json', $res['headers']['content-type']);
+        $this->assertTrue($res['body']['success']);
+    }
+
     public function testCorsHeaders(): void
     {
         $res = $this->fetch('/health');

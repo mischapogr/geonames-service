@@ -138,6 +138,16 @@ Set `API_KEY` to require a key on every request except `/health`, sent as the
 `X-Api-Key` header or the `api_key` query parameter. Without a valid key the
 API answers `401`. When `API_KEY` is empty (the default), no key is required.
 
+The same key protects `cache-clear.php`, which empties the APCu cache after a
+re-import:
+
+```sh
+curl -H "X-Api-Key: $API_KEY" https://geonames.example.com/src/cache-clear.php
+```
+
+In the Docker setup the path is `/cache-clear.php`, because `src/` is the
+document root there.
+
 ## Datasets
 
 | Dataset | Size | Places | Use |
