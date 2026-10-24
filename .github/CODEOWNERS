@@ -1,0 +1,10 @@
+# Every change is reviewed by the maintainer.
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+*                       @mischapogr
+
+# The API contract, the schema, and the import pipeline carry the
+# compatibility guarantees existing clients rely on. Called out so a future
+# co-maintainer arrangement has to name them explicitly.
+/src/index.php          @mischapogr
+/migrations/            @mischapogr
+/scripts/               @mischapogr

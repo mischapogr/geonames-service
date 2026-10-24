@@ -1,0 +1,32 @@
+name: Feature or change proposal
+description: Propose a change to behaviour, the API, or scope.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What cannot be done today, and who is blocked by it. Not the solution yet.
+    validations: { required: true }
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: What you want to happen, and which endpoint, script, or setting it touches.
+    validations: { required: true }
+
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Effect on existing clients
+      description: >
+        Would a request that works today return a different response? Does it
+        need a schema migration or a re-import? If it changes none of those,
+        say so explicitly.
+    validations: { required: true }
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered

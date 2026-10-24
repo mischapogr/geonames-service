@@ -1,0 +1,77 @@
+name: Bug report
+description: Something behaves differently from the documented behaviour.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not report a security vulnerability here — see [SECURITY.md](../blob/main/SECURITY.md).
+
+        Never paste a real API key or database credentials. Redact them; the
+        shape of the value is what matters.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: Observed behaviour, and the documented behaviour you expected instead.
+      placeholder: |
+        /api/cities/search?q=Zur&country=CH returned ... but the README says ...
+    validations: { required: true }
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: The smallest sequence that shows it. Include the exact request or command.
+      placeholder: |
+        1. docker compose up -d && ./scripts/import-cities15000
+        2. curl "http://localhost:8082/api/places?q=..."
+        3. ...
+    validations: { required: true }
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Which part
+      multiple: true
+      options:
+        - City search (/api/cities/search)
+        - Places search (/api/places)
+        - City by ID (/api/cities/{id})
+        - Health (/health)
+        - Download or import scripts
+        - Deploy script
+        - Docker Compose stack
+        - Documentation
+    validations: { required: true }
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: >
+        The full response body and status code, relevant Apache or MySQL log
+        lines, and the output of any script you ran.
+      render: text
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      value: |
+        - Commit or version:
+        - How it runs (Docker Compose / shared hosting / other):
+        - Dataset (cities15000 / allCountries, with or without alternate names):
+        - PHP and MySQL versions:
+    validations: { required: true }
+
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Confirmation
+      options:
+        - label: This is not a security vulnerability.
+          required: true
+        - label: I have removed API keys and credentials.
+          required: true

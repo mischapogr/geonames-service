@@ -33,7 +33,7 @@ docker run --rm -v "$PWD/src:/src:ro" php:8.3-cli php -l /src/index.php
 
 # End-to-end suite against the running stack on :8082
 docker run --rm -v "$PWD:/app" -w /app composer:2 install --no-interaction --no-progress
-docker run --rm --network host -v "$PWD:/app" -w /app php:8.3-cli vendor/bin/phpunit
+docker run --rm --network host -v "$PWD:/app" -w /app php:8.3-cli php vendor/bin/phpunit
 
 # Browser cache tests (optional, needs Node.js)
 npm install && npx playwright install chromium && npm run test:browser
