@@ -22,7 +22,10 @@ services:
       --secure-file-priv=/var/lib/mysql-files
 
   app:
-    build: .
+    build:
+      context: .
+      args:
+        PHP_VERSION: "${PHP_VERSION:-8.3}"  # e.g. PHP_VERSION=8.5 docker compose up -d --build
     container_name: geonames-app
     restart: unless-stopped
     labels:

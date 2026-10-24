@@ -18,10 +18,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - name: PHP syntax
-        run: >-
-          docker run --rm -v "$GITHUB_WORKSPACE:/app:ro" -w /app php:8.3-cli
-          sh -c 'for f in src/*.php tests/E2E/*.php; do php -l "$f" || exit 1; done'
+      - name: PHP syntax on every supported version
+        run: |
+          for v in 8.1 8.2 8.3 8.4 8.5; do
+            echo "PHP $v"
+            docker run --rm -v "$GITHUB_WORKSPACE:/app:ro" -w /app "php:$v-cli" \
+              sh -c 'for f in src/*.php; do php -l "$f" || exit 1; done'
+          done
       - name: Shell scripts
         run: >-
           git ls-files scripts deploy.example | xargs grep -l -E '^#!.*(ba)?sh' |
@@ -33,14 +36,23 @@ jobs:
           rhysd/actionlint:1.7.12 -color
 
   e2e:
-    name: End-to-end suite
+    name: End-to-end suite (PHP ${{ matrix.php }})
     runs-on: ubuntu-latest
     needs: lint
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        # Keep in sync with "Supported PHP versions" in README.md.
+        php: ['8.1', '8.2', '8.3', '8.4', '8.5']
+    env:
+      PHP_VERSION: ${{ matrix.php }}
     steps:
       - uses: actions/checkout@v7
       - name: Start the stack
         run: docker compose up -d --build database app
+      - name: Check the app runs the PHP version under test
+        run: docker compose exec -T app php -r 'echo PHP_VERSION, PHP_EOL;' | grep -E "^${PHP_VERSION}\."
       - name: Wait for the database
         # Queries over TCP only succeed on the final server, which MySQL starts
         # after every migration in docker-entrypoint-initdb.d has run.
@@ -65,9 +77,16 @@ jobs:
           docker run --rm -v "$GITHUB_WORKSPACE:/app" -w /app composer:2
           install --no-interaction --no-progress
       - name: Run the end-to-end suite
+        # The suite talks HTTP, so the runner's PHP (8.3, for PHPUnit 11) is
+        # independent of the server PHP under test.
         run: >-
           docker run --rm --network host -v "$GITHUB_WORKSPACE:/app" -w /app php:8.3-cli
           php vendor/bin/phpunit --do-not-cache-result
+      - name: No PHP warnings or deprecations in the app log
+        run: |
+          if docker compose logs app | grep -i -E 'PHP (warning|deprecated|notice|fatal)'; then
+            exit 1
+          fi
       - name: Service logs on failure
         if: failure()
         run: docker compose logs --tail=200 database app

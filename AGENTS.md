@@ -68,6 +68,8 @@ only `q` and `country` are unaffected. The E2E suite pins this.
 - Optional API key auth via `API_KEY` env var (header `X-Api-Key` or query `api_key`)
 - Config is entirely via environment variables in `docker-compose.yml`
 - No runtime PHP dependencies; Composer only installs PHPUnit for the E2E suite
+- `src/` must run on PHP 8.1 to 8.5 (the CI matrix): no syntax or functions newer than 8.1, such as
+  readonly classes, DNF types, typed class constants, `#[\Override]`, or property hooks
 - New query parameters are opt-in; a request without them must return byte-identical responses
 - Migrations are numbered and never edited after they ship; the deploy loop re-applies every file
   and ignores errors, so a migration must be harmless when it runs again

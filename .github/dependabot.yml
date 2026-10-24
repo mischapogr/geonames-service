@@ -26,11 +26,5 @@ updates:
       prefix: ci
       include: scope
 
-  # The Dockerfile pins the PHP and Apache base image of the app container.
-  - package-ecosystem: docker
-    directory: /
-    schedule:
-      interval: weekly
-    commit-message:
-      prefix: build
-      include: scope
+  # No docker entry: the Dockerfile takes the PHP version as a build argument,
+  # and the supported versions are the CI matrix in .github/workflows/ci.yml.

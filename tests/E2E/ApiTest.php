@@ -75,6 +75,26 @@ final class ApiTest extends TestCase
         $this->assertArrayHasKey('population', $city);
     }
 
+    /**
+     * Clients rely on these JSON types. PHP 8.0 returned every column as a
+     * string, which is why the supported range starts at PHP 8.1.
+     */
+    public function testResponseFieldTypes(): void
+    {
+        $search = $this->fetch('/api/cities/search?q=Zur&country=CH')['body']['data'][0];
+        $byId = $this->fetch('/api/cities/2657896')['body']['data'];
+        $place = $this->fetch('/api/places?q=Zur&country=CH')['body']['items'][0];
+
+        foreach ([$search, $byId] as $city) {
+            $this->assertIsInt($city['geonameid']);
+            $this->assertIsInt($city['population']);
+            $this->assertIsString($city['latitude']);
+            $this->assertIsString($city['longitude']);
+        }
+        $this->assertIsFloat($place['lat']);
+        $this->assertIsFloat($place['lon']);
+    }
+
     public function testCitySearchTooShort(): void
     {
         $res = $this->fetch('/api/cities/search?q=Z');

@@ -1,4 +1,6 @@
-FROM php:8.3-apache
+# Supported PHP versions are listed in the README; CI builds each of them.
+ARG PHP_VERSION=8.3
+FROM php:${PHP_VERSION}-apache
 
 RUN docker-php-ext-install pdo pdo_mysql
 RUN pecl install apcu && docker-php-ext-enable apcu

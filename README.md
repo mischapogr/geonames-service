@@ -6,7 +6,7 @@
 
 [![CI](https://github.com/mischapogr/geonames-service/actions/workflows/ci.yml/badge.svg)](https://github.com/mischapogr/geonames-service/actions/workflows/ci.yml)
 [![Licence](https://img.shields.io/badge/licence-Apache--2.0-blue.svg)](LICENSE)
-[![PHP](https://img.shields.io/badge/php-8.3-777BB4.svg)](Dockerfile)
+[![PHP](https://img.shields.io/badge/php-8.1%20%E2%80%93%208.5-777BB4.svg)](#supported-php-versions)
 [![Data](https://img.shields.io/badge/data-CC%20BY%204.0-lightgrey.svg)](#data-attribution)
 
 [Quick start](#quick-start) · [API](#api) · [Datasets](#datasets) · [Configuration](#configuration) · [Changelog](CHANGELOG.md) · [Contributing](CONTRIBUTING.md)
@@ -54,6 +54,36 @@ that and nothing more.
 - **Your data stays yours.** Searches never leave your server.
 - **Additive API.** New behaviour arrives as opt-in query parameters; a request
   that works today keeps returning the same bytes.
+
+## Requirements
+
+| Component | Requirement |
+| --- | --- |
+| PHP | 8.1 to 8.5, with `pdo_mysql`; `apcu` is optional and enables `CACHE_TTL` |
+| Database | MySQL 8.0 (the version the Docker setup and CI use) |
+| Web server | Apache with `mod_rewrite`, or any server that routes unknown paths to `src/index.php` |
+| Import scripts | bash, `awk`, `unzip`, `wget` or `curl`, and the `mysql` client with `LOAD DATA LOCAL INFILE` |
+
+### Supported PHP versions
+
+CI runs the full end-to-end suite against every version marked as tested. The
+Docker image defaults to PHP 8.3; build another with
+`PHP_VERSION=8.5 docker compose up -d --build`.
+
+| PHP | This project | PHP upstream |
+| --- | --- | --- |
+| 8.5 | Tested | Active support |
+| 8.4 | Tested | Active support |
+| 8.3 | Tested, Docker default | Security fixes only |
+| 8.2 | Tested | Security fixes until 2026-12-31 |
+| 8.1 | Tested | End of life since 2025-12-31; upgrade when you can |
+| 8.0 | Not supported | End of life |
+| 7.4 and older | Not supported | End of life |
+
+PHP 8.0 runs the code but returns IDs and populations as JSON strings instead
+of numbers, because its PDO MySQL driver does not convert column types. Older
+versions cannot parse the code. Responses are byte-identical across all tested
+versions.
 
 ## Quick start
 
@@ -163,8 +193,8 @@ network; see [SECURITY.md](SECURITY.md).
 
 ## Deployment
 
-`deploy.example` deploys to a host with PHP, MySQL, and SSH access, such as
-shared hosting. Copy it to `deploy` (ignored by git), put `DEPLOY_HOST`,
+`deploy.example` deploys to a host with PHP 8.1 or newer, MySQL, and SSH
+access, such as shared hosting. Copy it to `deploy` (ignored by git), put `DEPLOY_HOST`,
 `SUBDOMAIN`, and the database credentials in `.env.deploy`, then run:
 
 ```sh

@@ -24,6 +24,9 @@ curated summary.
   CodeQL scanning, and Dependabot.
 - `.gitattributes` (LF line endings) and a `.dockerignore` that limits the
   build context to `docker/` and `src/`.
+- Supported PHP versions are documented (8.1 to 8.5) and declared in
+  `composer.json`; CI runs the end-to-end suite on each of them, and the
+  Dockerfile takes a `PHP_VERSION` build argument (default 8.3).
 
 ## [1.5.0] - 2026-10-24
 
