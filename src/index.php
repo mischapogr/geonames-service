@@ -155,7 +155,11 @@ function handleCitySearch(): void
         return;
     }
 
-    $cacheKey = "search:" . strtolower($query) . ":{$country}:{$minPop}:" . ($excludeDistricts ? '1' : '0');
+    $cacheKey = "search:" . strtolower($query) . ":{$country}";
+    if ($minPop > 0 || $excludeDistricts) {
+        // Unfiltered requests keep their original cache key
+        $cacheKey .= ":{$minPop}:" . ($excludeDistricts ? '1' : '0');
+    }
     $cached = cacheGet($cacheKey);
     if ($cached !== false) {
         echo json_encode($cached);
@@ -178,7 +182,8 @@ function handleCitySearch(): void
             $params['minpop'] = $minPop;
         }
 
-        $districtFilter = $excludeDistricts ? " AND c.feature_code != 'PPLX'" : '';
+        // NULL = feature_code not backfilled yet; keep the row instead of dropping it
+        $districtFilter = $excludeDistricts ? " AND (c.feature_code IS NULL OR c.feature_code != 'PPLX')" : '';
 
         $params['exact_query'] = $query;
         $params['prefix_query'] = $query . '%';
@@ -248,7 +253,11 @@ function handlePlacesSearch(): void
         return;
     }
 
-    $cacheKey = "places:" . strtolower($query) . ":{$country}:{$minPop}:" . ($excludeDistricts ? '1' : '0');
+    $cacheKey = "places:" . strtolower($query) . ":{$country}";
+    if ($minPop > 0 || $excludeDistricts) {
+        // Unfiltered requests keep their original cache key
+        $cacheKey .= ":{$minPop}:" . ($excludeDistricts ? '1' : '0');
+    }
     $cached = cacheGet($cacheKey);
     if ($cached !== false) {
         echo json_encode($cached);
@@ -271,7 +280,8 @@ function handlePlacesSearch(): void
             $params['minpop'] = $minPop;
         }
 
-        $districtFilter = $excludeDistricts ? " AND c.feature_code != 'PPLX'" : '';
+        // NULL = feature_code not backfilled yet; keep the row instead of dropping it
+        $districtFilter = $excludeDistricts ? " AND (c.feature_code IS NULL OR c.feature_code != 'PPLX')" : '';
 
         $params['exact_query'] = $query;
         $params['prefix_query'] = $query . '%';

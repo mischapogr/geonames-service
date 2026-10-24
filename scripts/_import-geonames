@@ -32,6 +32,8 @@ if [ ! -f "$GEONAMES_FILE" ]; then
     exit 1
 fi
 
+require_column cityinfo feature_code 005-add-feature-code.sql
+
 # Ensure admin1 codes lookup file exists (English fallback)
 if [ ! -f "$ADMIN1_FILE" ]; then
     "$SCRIPT_DIR/download-admin1codes"

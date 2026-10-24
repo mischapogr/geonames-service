@@ -1,0 +1,78 @@
+#!/bin/bash
+#
+# Fill cityinfo.feature_code from a GeoNames dump without re-importing.
+# Only feature_code is written: no truncate, all other columns and
+# city_alt_names stay untouched, so search keeps serving during the run.
+# Safe to re-run.
+#
+# Usage: ./scripts/backfill-feature-code <geonames_file.txt> [filter]
+# Pass the same file and filter the table was imported with:
+#   production:  ./scripts/backfill-feature-code data/allCountries.txt cities
+#   development: ./scripts/backfill-feature-code data/cities15000.txt
+#
+set -e
+
+if [ -z "$1" ]; then
+    echo "Usage: $0 <geonames_file.txt> [filter]"
+    echo ""
+    echo "Filter options (same as _import-geonames):"
+    echo "  cities - Populated places only (feature class P)"
+    echo "  all    - Every record in the file (default)"
+    exit 1
+fi
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/_db"
+
+GEONAMES_FILE="$1"
+FILTER_MODE="${2:-all}"
+STAGE_TABLE="cityinfo_feature_code_stage"
+TMP_TSV="/tmp/geonames_feature_codes.tsv"
+
+if [ ! -f "$GEONAMES_FILE" ]; then
+    echo "Error: File not found: $GEONAMES_FILE"
+    exit 1
+fi
+
+require_column cityinfo feature_code 005-add-feature-code.sql
+
+trap 'rm -f "$TMP_TSV"' EXIT
+
+echo "=========================================="
+echo "Backfill cityinfo.feature_code"
+echo "=========================================="
+echo ""
+echo "Source file: $GEONAMES_FILE"
+echo "Filter mode: $FILTER_MODE"
+echo ""
+
+echo "Extracting feature codes..."
+if [ "$FILTER_MODE" = "cities" ]; then
+    awk -F'\t' 'BEGIN { OFS="\t" } $7 == "P" { print $1, $8 }' "$GEONAMES_FILE" > "$TMP_TSV"
+else
+    awk -F'\t' 'BEGIN { OFS="\t" } { print $1, $8 }' "$GEONAMES_FILE" > "$TMP_TSV"
+fi
+echo "Extracted: $(wc -l < "$TMP_TSV") records"
+
+echo ""
+echo "Staging feature codes..."
+run_mysql -e "DROP TABLE IF EXISTS $STAGE_TABLE;
+    CREATE TABLE $STAGE_TABLE (
+        geonameid INT PRIMARY KEY,
+        feature_code VARCHAR(10) NULL
+    ) ENGINE=InnoDB"
+load_data_file "$TMP_TSV" "$STAGE_TABLE" "(geonameid, feature_code)"
+
+echo "Updating cityinfo..."
+run_mysql -e "UPDATE cityinfo c
+    JOIN $STAGE_TABLE s ON s.geonameid = c.geonameid
+    SET c.feature_code = s.feature_code;
+    DROP TABLE $STAGE_TABLE"
+
+echo ""
+echo "Result:"
+run_mysql -e "SELECT COUNT(*) AS total,
+    COUNT(feature_code) AS with_feature_code,
+    SUM(feature_code IS NULL) AS still_null,
+    SUM(feature_code = 'PPLX') AS districts
+    FROM cityinfo"

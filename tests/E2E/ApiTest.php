@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\E2E;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 final class ApiTest extends TestCase
@@ -144,5 +145,73 @@ final class ApiTest extends TestCase
         $res = $this->fetch('/health');
 
         $this->assertArrayHasKey('access-control-allow-origin', $res['headers']);
+    }
+
+    /**
+     * Filter params that must behave exactly like an unfiltered request.
+     * minpop=0 is what clients send when they do not want to filter.
+     */
+    public static function neutralFilterProvider(): array
+    {
+        return [
+            'minpop=0' => ['/api/cities/search?q=Zur', '/api/cities/search?q=Zur&minpop=0'],
+            'minpop=0 + country' => ['/api/cities/search?q=Zur&country=CH', '/api/cities/search?q=Zur&minpop=0&country=CH'],
+            'non-numeric minpop' => ['/api/cities/search?q=Zur', '/api/cities/search?q=Zur&minpop=abc'],
+            'negative minpop' => ['/api/cities/search?q=Zur', '/api/cities/search?q=Zur&minpop=-5'],
+            'no_districts=0' => ['/api/cities/search?q=Zur', '/api/cities/search?q=Zur&no_districts=0'],
+            'no_districts=true' => ['/api/cities/search?q=Zur', '/api/cities/search?q=Zur&no_districts=true'],
+            'places minpop=0' => ['/api/places?q=Zur', '/api/places?q=Zur&minpop=0'],
+            'places no_districts=0' => ['/api/places?q=Zur&country=CH', '/api/places?q=Zur&country=CH&no_districts=0'],
+        ];
+    }
+
+    #[DataProvider('neutralFilterProvider')]
+    public function testNeutralFilterValuesMatchUnfilteredSearch(string $unfiltered, string $neutral): void
+    {
+        $expected = $this->fetch($unfiltered);
+        $actual = $this->fetch($neutral);
+
+        $this->assertSame(200, $expected['status']);
+        $this->assertSame(200, $actual['status']);
+        $this->assertSame($expected['body'], $actual['body']);
+    }
+
+    public function testCitySearchMinpopFilter(): void
+    {
+        $res = $this->fetch('/api/cities/search?q=Zur&minpop=100000');
+
+        $this->assertSame(200, $res['status']);
+        $this->assertTrue($res['body']['success']);
+        $this->assertContains(2657896, array_column($res['body']['data'], 'geonameid'));
+
+        foreach ($res['body']['data'] as $city) {
+            $population = (int) $city['population'];
+            $this->assertTrue(
+                $population === 0 || $population >= 100000,
+                "{$city['name']} has population {$population}"
+            );
+        }
+    }
+
+    public function testCitySearchNoDistrictsExcludesDistricts(): void
+    {
+        // Wandsbek (2911285) is a PPLX district of Hamburg
+        $default = $this->fetch('/api/cities/search?q=Wandsbek&country=DE');
+        $filtered = $this->fetch('/api/cities/search?q=Wandsbek&country=DE&no_districts=1');
+
+        $this->assertContains(2911285, array_column($default['body']['data'], 'geonameid'));
+        $this->assertSame(200, $filtered['status']);
+        $this->assertTrue($filtered['body']['success']);
+        $this->assertNotContains(2911285, array_column($filtered['body']['data'], 'geonameid'));
+    }
+
+    public function testPlacesNoDistrictsExcludesDistricts(): void
+    {
+        $default = $this->fetch('/api/places?q=Wandsbek&country=DE');
+        $filtered = $this->fetch('/api/places?q=Wandsbek&country=DE&no_districts=1');
+
+        $this->assertContains('geo:2911285', array_column($default['body']['items'], 'placeId'));
+        $this->assertSame(200, $filtered['status']);
+        $this->assertNotContains('geo:2911285', array_column($filtered['body']['items'], 'placeId'));
     }
 }
