@@ -1,0 +1,8 @@
+# The image copies only docker/ and src/. Keep everything else out of the build
+# context: data/ alone holds about a gigabyte of GeoNames dumps.
+*
+!docker/
+!src/
+
+# Deployment config generated on the host; never bake it into an image.
+src/.env.php

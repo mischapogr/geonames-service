@@ -1,0 +1,5 @@
+# Scripts run on Linux hosts and in containers; a CRLF shebang line fails with
+# "bad interpreter", so every text file is checked out with LF endings.
+* text=auto eol=lf
+
+*.zip binary

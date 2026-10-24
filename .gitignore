@@ -15,6 +15,10 @@ src/.env.php
 # PHP
 /vendor/
 composer.lock
+.phpunit.result.cache
+
+# Local scratch space
+_tmp/
 
 # Node (Playwright tests only)
 node_modules/
