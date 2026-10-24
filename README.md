@@ -103,4 +103,4 @@ City data is sourced from [GeoNames](http://www.geonames.org/) and licensed unde
 
 ## License
 
-Code: MIT. Data: CC BY 4.0 (GeoNames).
+Code: [Apache License 2.0](LICENSE), see also [NOTICE](NOTICE). Data: CC BY 4.0 (GeoNames).

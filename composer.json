@@ -1,11 +1,20 @@
 {
-    "require-dev": {
-        "phpunit/phpunit": "^11.0"
-    },
+    "name": "mischapogr/geonames-service",
+    "description": "Self-hosted REST API for city and place autocomplete, built on GeoNames data",
+    "type": "project",
+    "license": "Apache-2.0",
     "authors": [
         {
             "name": "Mischa Pogrebnyak",
             "homepage": "https://github.com/mischapogr"
         }
-    ]
+    ],
+    "support": {
+        "issues": "https://github.com/mischapogr/geonames-service/issues",
+        "source": "https://github.com/mischapogr/geonames-service",
+        "security": "https://github.com/mischapogr/geonames-service/security/policy"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^11.0"
+    }
 }
