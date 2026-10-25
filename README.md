@@ -69,7 +69,8 @@ that and nothing more.
 CI runs the full end-to-end suite against every version marked as tested. The
 Docker image defaults to PHP 8.5; build another with
 `PHP_VERSION=8.1 docker compose up -d --build`. Throughput is the same on all
-tested versions within measurement noise, so pick by upstream support.
+tested versions within measurement noise (see [Performance](#performance)), so
+pick by upstream support.
 
 | PHP | This project | PHP upstream |
 | --- | --- | --- |
@@ -201,6 +202,95 @@ development, the generated `src/.env.php` on a deployed host.
 `deploy.example` defaults to `CACHE_TTL=3600` and `HTTP_CACHE_TTL=300`. The
 Compose values are for local development only. Never expose that stack to a
 network; see [SECURITY.md](SECURITY.md).
+
+## Performance
+
+Measured in October 2026 on one machine (Intel Xeon E5-1650 v2, 6 cores) with
+the Docker setup and the `cities15000` dataset plus alternate names (33,623
+places, 175,496 alternate names). Absolute numbers depend on the hardware; the
+comparisons carry over.
+
+### Requests per second
+
+ApacheBench with 8 concurrent keep-alive connections, 5 seconds per run, median
+of 3 rounds, `HTTP_CACHE_TTL=0`. The image runs Apache with OPcache on and the
+JIT off. No request failed. With PHP 8.5:
+
+| Request | Cache off | APCu cache on | Speed-up |
+| --- | ---: | ---: | ---: |
+| `/api/cities/search?q=Zur&country=CH` | 2,880 | 15,400 | 5× |
+| `/api/cities/search?q=Mün` (alternate name) | 1,250 | 15,500 | 12× |
+| `/api/places?q=Ber` | 930 | 14,900 | 16× |
+| `/api/cities/2657896?lang=de` | 1,320 | 17,700 | 13× |
+
+With the cache off, every request queries MySQL and takes 3 to 9 ms at this
+concurrency; a cache hit takes about 0.5 ms. Set `CACHE_TTL` in production.
+
+Across PHP versions, as the change in throughput against PHP 8.1 (geometric
+mean of the four requests, higher is better):
+
+| Cache | PHP 8.2 | PHP 8.3 | PHP 8.4 | PHP 8.5 | Spread between rounds |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Off | +4% | +3% | +4% | +5% | 10% |
+| On | +2% | +3% | +2% | +2% | 6% |
+
+Every difference is smaller than the spread between rounds of the same version,
+so the PHP version does not change throughput.
+
+### PHP engine alone
+
+Three CPU-bound scripts show where the PHP versions do differ. Each run starts a
+fresh `php:<version>-cli` container on one pinned core without network, with
+OPcache on and the JIT off (the default) or on (`opcache.jit=tracing`). Each of
+10 rounds runs every version back to back:
+
+- `Zend/micro_bench.php` from php-src 8.5.0: function calls, property and
+  static access, object creation.
+- `Zend/bench.php` from php-src 8.5.0: classic algorithms such as Mandelbrot,
+  Fibonacci, heapsort, and matrix multiplication.
+- The service's own work per search request once MySQL has answered:
+  deduplicating 40 rows down to 20 and encoding them as JSON, as `src/index.php`
+  does.
+
+Other programs were running on the machine, so single runs vary by 25 to 40%.
+Comparing each version with PHP 8.1 within the same round cancels most of that.
+The table shows the median run time on PHP 8.1. For later versions it shows the
+median change against 8.1 within a round (lower is faster), and in how many
+rounds the version was faster:
+
+| Benchmark | JIT | PHP 8.1 | PHP 8.2 | PHP 8.3 | PHP 8.4 | PHP 8.5 |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| `micro_bench.php` | off | 2.79 s | 0% (5/10) | +4% (3/10) | −2% (7/10) | −6% (8/10) |
+| | on | 1.70 s | −4% (8/10) | −3% (6/10) | −18% (10/10) | −21% (10/10) |
+| `bench.php` | off | 0.47 s | −2% (7/10) | −7% (7/10) | 0% (5/10) | −3% (7/10) |
+| | on | 0.17 s | −1% (5/10) | +4% (4/10) | −6% (7/10) | −10% (7/10) |
+| Service request work | off | 22.1 µs | +1% (4/10) | +7% (2/10) | +3% (3/10) | +4% (2/10) |
+| | on | 20.0 µs | +1% (5/10) | +2% (4/10) | 0% (5/10) | +7% (2/10) |
+
+- With the JIT, PHP 8.4 and 8.5 run function calls and property access 18 and
+  21% faster than 8.1, in every round. Without it, 8.5 is about 6% faster.
+- On `bench.php` no version is consistently faster.
+- The service's own PHP work takes 20 to 23 µs per request on every version,
+  and 8.3 to 8.5 are 0.7 to 1.5 µs slower than 8.1 in most rounds. An uncached
+  request takes 3 to 9 ms, mostly waiting for MySQL, so neither difference
+  shows up in throughput.
+- The JIT makes `bench.php` 2.6 to 3.0 times faster and `micro_bench.php` 1.6
+  to 2.0 times, but the service's work only 1.05 to 1.11 times. It stays off in
+  the image.
+
+### Reproducing
+
+The scripts are in [`tests/bench/`](tests/bench/), and the CSVs behind the
+tables above are in [`tests/bench/results/`](tests/bench/results/). They need
+bash, curl, and Docker. Each script writes a CSV to `_tmp/bench/` and prints
+the summary:
+
+```sh
+docker compose up -d database   # with cities15000 and alternate names imported
+tests/bench/http                # about 15 minutes, uses ports 8281 to 8285
+tests/bench/cpu                 # about 12 minutes, pins the last CPU (set CPU=n)
+tests/bench/summarize tests/bench/results/2026-10-cpu.csv
+```
 
 ## Deployment
 
