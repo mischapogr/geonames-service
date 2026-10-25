@@ -23,5 +23,9 @@ jobs:
 
       - name: Semantic Release
         uses: cycjimmy/semantic-release-action@v8
+        with:
+          # Without this, every run installs the newest semantic-release, a new major included.
+          # Dependabot does not update it; raise it by hand after reading the release notes.
+          semantic_version: 25
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
