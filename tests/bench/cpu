@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+# CPU-only comparison of PHP versions: php-src Zend/bench.php and Zend/micro_bench.php, and
+# the service's own work per search request (service-work.php). Every run starts a fresh
+# php:<version>-cli container on one pinned CPU without network, with OPcache on and the JIT
+# off and on. The version order rotates each round so drift does not favour one version.
+#
+# usage: tests/bench/cpu [output.csv]      (default: _tmp/bench/cpu-<timestamp>.csv)
+# env:   ROUNDS (10), CPU (the last CPU), VERSIONS ("8.1 8.2 8.3 8.4 8.5")
+set -euo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$HERE/../.." && pwd)"
+OUT="$(realpath -m "${1:-$ROOT/_tmp/bench/cpu-$(date +%Y%m%d-%H%M%S).csv}")"
+ROUNDS="${ROUNDS:-10}"
+CPU="${CPU:-$(( $(nproc) - 1 ))}"
+read -r -a VERSIONS <<<"${VERSIONS:-8.1 8.2 8.3 8.4 8.5}"
+
+# The php-src benchmarks are downloaded from a fixed tag and checked against these hashes.
+PHP_SRC_TAG=php-8.5.0
+declare -A PHP_SRC_SHA256=(
+    [bench.php]=c9bf9e8a225ac2d388225bec21714b2ddf93e9b1b541c1c2fe23e666039893fb
+    [micro_bench.php]=272c470c08c5b0677517575fa3114eb988d3915cdb65b9d830a29ff170c8ae1c
+)
+
+declare -A JIT_FLAGS=(
+    [off]="-d opcache.enable_cli=1 -d opcache.jit=disable"
+    [tracing]="-d opcache.enable_cli=1 -d opcache.jit_buffer_size=64M -d opcache.jit=tracing"
+)
+
+ZEND="$(mktemp -d)"
+trap 'rm -rf "$ZEND"' EXIT
+for f in "${!PHP_SRC_SHA256[@]}"; do
+    curl -fsSL -o "$ZEND/$f" "https://raw.githubusercontent.com/php/php-src/$PHP_SRC_TAG/Zend/$f"
+    echo "${PHP_SRC_SHA256[$f]}  $ZEND/$f" | sha256sum -c --quiet -
+done
+
+php_run() {   # php_run <version> <jit> <php args...>
+    local v="$1" jit="$2"; shift 2
+    # shellcheck disable=SC2086  # JIT_FLAGS holds several options on purpose
+    docker run --rm --network none --cpuset-cpus="$CPU" \
+        -v "$ZEND:/zend:ro" -v "$HERE:/bench:ro" "php:$v-cli" php ${JIT_FLAGS[$jit]} "$@"
+}
+
+# Pull the images and confirm OPcache and the JIT are in the state each run expects.
+for v in "${VERSIONS[@]}"; do
+    for jit in off tracing; do
+        printf 'PHP %s jit=%-8s ' "$v" "$jit"
+        php_run "$v" "$jit" -r '$s = opcache_get_status(false);
+            echo PHP_VERSION, " opcache=", var_export($s["opcache_enabled"] ?? false, true),
+                 " jit=", var_export($s["jit"]["on"] ?? false, true), "\n";'
+    done
+done
+echo "pinned to CPU $CPU, $ROUNDS rounds"
+
+mkdir -p "$(dirname "$OUT")"
+echo "round,php,jit,bench_s,micro_s,service_us" > "$OUT"
+for round in $(seq 1 "$ROUNDS"); do
+    rotate=$(( (round - 1) % ${#VERSIONS[@]} ))
+    order=("${VERSIONS[@]:rotate}" "${VERSIONS[@]:0:rotate}")
+    for v in "${order[@]}"; do
+        for jit in off tracing; do
+            bench=$(php_run "$v" "$jit" /zend/bench.php | awk '/^Total/ {print $2}')
+            micro=$(php_run "$v" "$jit" /zend/micro_bench.php | awk '/^Total/ {print $2}')
+            service=$(php_run "$v" "$jit" /bench/service-work.php)
+            echo "$round,$v,$jit,$bench,$micro,$service" | tee -a "$OUT"
+        done
+    done
+done
+
+echo "results: $OUT"
+"$HERE/summarize" "$OUT"

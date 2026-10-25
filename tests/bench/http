@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+# Request throughput of the service on several PHP versions against one database. Builds the
+# image once per version, runs each with the APCu cache off and then on, and measures four
+# requests with ApacheBench over 8 keep-alive connections. The version order rotates each
+# round so drift does not favour one version. Leaves the images geonames-bench:php<version>.
+#
+# usage: tests/bench/http [output.csv]     (default: _tmp/bench/http-<timestamp>.csv)
+# env:   ROUNDS (3), SECONDS_PER_RUN (5), VERSIONS ("8.1 8.2 8.3 8.4 8.5")
+# needs: the dev database running with data imported, for example
+#        docker compose up -d database && ./scripts/download-cities15000 && ./scripts/import-cities15000
+set -euo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$HERE/../.." && pwd)"
+OUT="$(realpath -m "${1:-$ROOT/_tmp/bench/http-$(date +%Y%m%d-%H%M%S).csv}")"
+ROUNDS="${ROUNDS:-3}"
+SECONDS_PER_RUN="${SECONDS_PER_RUN:-5}"
+read -r -a VERSIONS <<<"${VERSIONS:-8.1 8.2 8.3 8.4 8.5}"
+DB_CONTAINER=geonames-db
+ENDPOINTS=(
+    "search|/api/cities/search?q=Zur&country=CH"
+    "search-altname|/api/cities/search?q=M%C3%BCn"
+    "places|/api/places?q=Ber"
+    "by-id|/api/cities/2657896?lang=de"
+)
+
+if [[ "$(docker inspect -f '{{.State.Running}}' "$DB_CONTAINER" 2>/dev/null)" != true ]]; then
+    echo "The $DB_CONTAINER container is not running; start it with: docker compose up -d database" >&2
+    exit 1
+fi
+# The app containers join the database's Compose network and reach it as "database".
+NET="$(docker inspect -f '{{range $name, $net := .NetworkSettings.Networks}}{{$name}}{{end}}' "$DB_CONTAINER")"
+
+count() {   # count <table>
+    docker exec -e MYSQL_PWD=geonames "$DB_CONTAINER" mysql -ugeonames geonames -sN -e "SELECT COUNT(*) FROM $1"
+}
+# A freshly started MySQL takes a few seconds before it accepts connections.
+docker exec -e MYSQL_PWD=geonames "$DB_CONTAINER" mysqladmin -ugeonames --wait=30 ping >/dev/null
+places=$(count cityinfo)
+if [[ "$places" == 0 ]]; then
+    echo "cityinfo is empty; import a dataset first (./scripts/import-cities15000)" >&2
+    exit 1
+fi
+echo "database: $places places, $(count city_alt_names) alternate names"
+
+declare -A PORT
+for i in "${!VERSIONS[@]}"; do PORT[${VERSIONS[$i]}]=$((8281 + i)); done
+
+ab() { docker run --rm --network host httpd:2.4 ab "$@"; }
+
+cleanup() {
+    for v in "${VERSIONS[@]}"; do docker rm -f "geonames-bench-php$v" >/dev/null 2>&1 || true; done
+}
+trap cleanup EXIT
+
+for v in "${VERSIONS[@]}"; do
+    echo "building PHP $v"
+    docker build -q --build-arg PHP_VERSION="$v" -t "geonames-bench:php$v" "$ROOT" >/dev/null
+done
+
+start() {   # start <version> <cache_ttl>
+    docker rm -f "geonames-bench-php$1" >/dev/null 2>&1 || true
+    docker run -d --name "geonames-bench-php$1" --network "$NET" -p "${PORT[$1]}:80" \
+        -e DB_HOST=database -e DB_NAME=geonames -e DB_USER=geonames -e DB_PASS=geonames \
+        -e CACHE_TTL="$2" -e HTTP_CACHE_TTL=0 "geonames-bench:php$1" >/dev/null
+    for _ in $(seq 1 30); do
+        curl -sf "localhost:${PORT[$1]}/health" >/dev/null && return
+        sleep 1
+    done
+    echo "PHP $1 did not start" >&2
+    exit 1
+}
+
+probe() {   # probe <version>: print what the web SAPI actually runs
+    docker cp "$HERE/probe.php" "geonames-bench-php$1:/var/www/html/probe.php"
+    curl -s "localhost:${PORT[$1]}/probe.php"
+    docker exec "geonames-bench-php$1" rm -f /var/www/html/probe.php
+}
+
+mkdir -p "$(dirname "$OUT")"
+echo "round,php,cache,endpoint,rps,mean_ms,p50_ms,p95_ms,p99_ms,failed" > "$OUT"
+for cache in 0 300; do
+    for v in "${VERSIONS[@]}"; do start "$v" "$cache"; done
+    if [[ $cache == 0 ]]; then
+        for v in "${VERSIONS[@]}"; do probe "$v"; done
+    fi
+    for round in $(seq 1 "$ROUNDS"); do
+        rotate=$(( (round - 1) % ${#VERSIONS[@]} ))
+        order=("${VERSIONS[@]:rotate}" "${VERSIONS[@]:0:rotate}")
+        for v in "${order[@]}"; do
+            for e in "${ENDPOINTS[@]}"; do
+                name="${e%%|*}"
+                url="http://127.0.0.1:${PORT[$v]}${e#*|}"
+                ab -k -l -q -n 300 -c 8 "$url" >/dev/null 2>&1   # warm-up
+                res=$(ab -k -l -q -t "$SECONDS_PER_RUN" -n 10000000 -c 8 "$url" 2>&1)
+                rps=$(awk '/^Requests per second/ {print $4}' <<<"$res")
+                mean=$(awk '/^Time per request:.*\(mean\)$/ {print $4}' <<<"$res")
+                p50=$(awk '$1=="50%" {print $2}' <<<"$res")
+                p95=$(awk '$1=="95%" {print $2}' <<<"$res")
+                p99=$(awk '$1=="99%" {print $2}' <<<"$res")
+                failed=$(awk '/^Failed requests/ {print $3}' <<<"$res")
+                echo "$round,$v,$cache,$name,$rps,$mean,$p50,$p95,$p99,$failed" | tee -a "$OUT"
+            done
+        done
+    done
+done
+
+echo "results: $OUT"
+"$HERE/summarize" "$OUT"

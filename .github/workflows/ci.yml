@@ -23,11 +23,11 @@ jobs:
           for v in 8.1 8.2 8.3 8.4 8.5; do
             echo "PHP $v"
             docker run --rm -v "$GITHUB_WORKSPACE:/app:ro" -w /app "php:$v-cli" \
-              sh -c 'for f in src/*.php; do php -l "$f" || exit 1; done'
+              sh -c 'for f in src/*.php tests/bench/*.php; do php -l "$f" || exit 1; done'
           done
       - name: Shell scripts
         run: >-
-          git ls-files scripts deploy.example | xargs grep -l -E '^#!.*(ba)?sh' |
+          git ls-files scripts tests/bench deploy.example | xargs grep -l -E '^#!.*(ba)?sh' |
           xargs docker run --rm -v "$GITHUB_WORKSPACE:/mnt:ro" -w /mnt
           koalaman/shellcheck:v0.11.0 -x -S warning
       - name: GitHub Actions workflows

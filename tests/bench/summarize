@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Summarize a CSV written by tests/bench/http or tests/bench/cpu, using PHP in a container.
+#
+# usage: tests/bench/summarize <results.csv>
+set -euo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CSV="$(realpath "${1:?usage: tests/bench/summarize <results.csv>}")"
+
+docker run --rm -v "$HERE:/bench:ro" -v "$(dirname "$CSV"):/results:ro" php:8.5-cli \
+    php /bench/summarize.php "/results/$(basename "$CSV")"
