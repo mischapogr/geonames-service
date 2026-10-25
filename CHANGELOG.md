@@ -9,11 +9,23 @@ curated summary.
 
 ## [Unreleased]
 
+### Added
+
+- Benchmark scripts in `tests/bench/`: `http` measures requests per second on
+  PHP 8.1 to 8.5 with the APCu cache off and on, and `cpu` compares the PHP
+  engines on php-src's `Zend/bench.php` and `Zend/micro_bench.php` and on the
+  service's own work per request. A new Performance section in the README
+  reports the results, and `tests/bench/results/` keeps the raw data.
+
 ### Changed
 
 - The Docker image defaults to PHP 8.5 instead of 8.3. A benchmark across PHP
   8.1 to 8.5 showed no throughput difference beyond measurement noise, and 8.5
   has the longest upstream support.
+- The release workflow uses `actions/checkout` v7 and
+  `cycjimmy/semantic-release-action` v8, which runs on Node 24, and pins
+  semantic-release to major version 25. Before, every release installed the
+  newest semantic-release, a new major included.
 
 ## [1.5.1] - 2026-10-24
 
