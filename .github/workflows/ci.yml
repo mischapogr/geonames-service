@@ -77,10 +77,10 @@ jobs:
           docker run --rm -v "$GITHUB_WORKSPACE:/app" -w /app composer:2
           install --no-interaction --no-progress
       - name: Run the end-to-end suite
-        # The suite talks HTTP, so the runner's PHP (8.3, for PHPUnit 11) is
-        # independent of the server PHP under test.
+        # The suite talks HTTP, so the runner's PHP (8.5, the minimum for
+        # PHPUnit 13) is independent of the server PHP under test.
         run: >-
-          docker run --rm --network host -v "$GITHUB_WORKSPACE:/app" -w /app php:8.3-cli
+          docker run --rm --network host -v "$GITHUB_WORKSPACE:/app" -w /app php:8.5-cli
           php vendor/bin/phpunit --do-not-cache-result
       - name: No PHP warnings or deprecations in the app log
         run: |
